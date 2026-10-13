@@ -15,6 +15,8 @@ set -euo pipefail
 
 # ------------------------------------------------------------------ settings
 
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 IMAGE_NAME="${IMAGE_NAME:-gilloffline}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-gilloffline}"
@@ -28,8 +30,9 @@ HOST_SSL_DIR="${HOST_SSL_DIR:-/app/ssl}"
 SSL_CERT_FILE="${SSL_CERT_FILE:-gilloffline.online.pem}"
 SSL_KEY_FILE="${SSL_KEY_FILE:-gilloffline.online.key}"
 
-# Grid content + uploaded images live here, outside the image.
-HOST_DATA_DIR="${HOST_DATA_DIR:-$(cd "$(dirname "$0")" && pwd)/data}"
+# Grid content + uploaded images live here, outside the image. The repo's data/
+# holds only the committed example that seeds this directory — nothing writes there.
+HOST_DATA_DIR="${HOST_DATA_DIR:-$REPO_DIR/data.local}"
 
 # nginx server_name — set this to your domain, e.g. SERVER_NAME=example.com
 SERVER_NAME="${SERVER_NAME:-_}"
@@ -38,7 +41,6 @@ TZ="${TZ:-Asia/Shanghai}"
 # ICP 备案号（可选）：显示在主页页脚中间，管理页里填过的话以管理页为准
 ICP_NUMBER="${ICP_NUMBER:-}"
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$REPO_DIR"
 
 # --------------------------------------------------------------------- output
@@ -111,6 +113,15 @@ mkdir -p "$HOST_DATA_DIR"
 if [ ! -f "$HOST_DATA_DIR/site.json" ]; then
   cp "$REPO_DIR/data/site.json" "$HOST_DATA_DIR/site.json"
   info "已用示例内容初始化 $HOST_DATA_DIR/site.json"
+fi
+
+# 更早的版本把运行时数据直接写在仓库的 data/ 里：新目录里还没有图片时（容器启动过
+# 一次会建出空的 uploads/，所以空目录也算“还没有”），把那边上传的图片复制一份过来，
+# 免得升级后看起来像图片全没了。旧的 data/ 原样保留，不会动。
+if [ -d "$REPO_DIR/data/uploads" ] && [ -z "$(ls -A "$HOST_DATA_DIR/uploads" 2>/dev/null || true)" ]; then
+  mkdir -p "$HOST_DATA_DIR/uploads"
+  cp -R "$REPO_DIR/data/uploads/." "$HOST_DATA_DIR/uploads/"
+  info "已把 data/uploads/ 里的图片复制到 $HOST_DATA_DIR/uploads/（旧的没删，确认没问题后可自行清理）"
 fi
 
 # ---------------------------------------------------------------------- build

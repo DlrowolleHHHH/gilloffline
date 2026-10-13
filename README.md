@@ -20,7 +20,8 @@
 │   ├── api.js               # JSON 接口
 │   ├── auth.js              # 密码校验、会话 cookie、登录限流
 │   └── store.js             # site.json 读写与字段校验
-├── data/site.json           # 示例内容（首次启动时写入数据卷）
+├── data/site.json           # 示例内容（只读，用来播种运行时数据目录）
+├── data.local/              # 本地运行时的数据（首次启动自动生成，不进 git）
 └── docker/                  # Dockerfile、nginx 配置模板、entrypoint
 ```
 
@@ -86,6 +87,10 @@ ADMIN_PASSWORD=dev node server/index.js
 # http://127.0.0.1:3000/admin  管理页
 ```
 
+运行时数据写在 `data.local/`（不在 git 里），首次启动时从 `data/site.json` 拷一份过去。
+仓库里的 `data/site.json` 只是示例内容、**只读取种子**，在管理页里怎么改都不会动到它。
+想换个地方放运行数据就设 `DATA_DIR`；想让本地预览回到初始状态，删掉 `data.local/` 重启即可。
+
 ## 部署
 
 只需要 Node 后端的话，一条命令构建并启动：
@@ -133,7 +138,7 @@ SSL_CERT_FILE=example.com.crt SSL_KEY_FILE=example.com.key ./build_run.sh
 | `ICP_NUMBER` | 无 | 页脚中间的 ICP 备案号；管理页里没填过时生效 |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | 宿主机映射端口 |
 | `HOST_SSL_DIR` | `/app/ssl` | 宿主机证书目录，容器内挂在同一个路径 |
-| `HOST_DATA_DIR` | `./data` | 宿主机数据目录，挂载为容器内 `/data` |
+| `HOST_DATA_DIR` | `./data.local` | 宿主机数据目录，挂载为容器内 `/data` |
 | `SERVER_NAME` | `_` | nginx `server_name`，填你的域名 |
 | `SSL_CERT_FILE` / `SSL_KEY_FILE` | `gilloffline.online.pem` / `gilloffline.online.key` | 证书文件名 |
 | `CONTAINER_NAME` / `IMAGE_NAME` / `IMAGE_TAG` | `gilloffline` | 容器与镜像名 |
@@ -147,15 +152,19 @@ ADMIN_PASSWORD='你的密码' SERVER_NAME=example.com HOST_SSL_DIR=/etc/letsencr
 
 ### 数据
 
-橱窗内容、站点设置和上传的图片都在 `HOST_DATA_DIR`（默认 `./data`，容器内 `/data`）：
+橱窗内容、站点设置和上传的图片都在 `HOST_DATA_DIR`（默认 `./data.local`，容器内 `/data`）：
 
 ```
-data/site.json        # 全部格子配置
-data/uploads/         # 上传的图片
-data/.session-secret  # 会话签名密钥（自动生成）
+data.local/site.json        # 全部格子配置
+data.local/uploads/         # 上传的图片
+data.local/.session-secret  # 会话签名密钥（自动生成）
 ```
 
 升级或重建镜像不会动这个目录，备份它等于备份了整个站。
+
+仓库里的 `data/site.json` 不属于运行时数据：它只是提交进 git 的示例，在数据目录还是空的时候被拷进去当初始内容。
+所以在一台服务器上第一次跑起来之前，如果 `data/` 里曾经存过正式内容（更早的版本把运行时数据直接写在仓库的 `data/` 里），
+`build_run.sh` 会把那份 `site.json` 和 `data/uploads/` 里的图片复制到新的数据目录，旧的 `data/` 原样留着不删。
 
 ## 接口
 

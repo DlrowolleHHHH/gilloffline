@@ -6,6 +6,9 @@
  * The whole site (settings + showcase cells) lives in a single JSON document so
  * that a save is always atomic and the file is trivial to back up / hand-edit.
  * No database, no dependencies.
+ *
+ * `data/site.json` is the committed example and is read-only at runtime: it
+ * seeds an empty data directory, so running the app can never dirty the tree.
  */
 
 const fs = require('fs');
@@ -13,7 +16,9 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..');
-const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
+/** Where writes land: a throwaway copy on a dev box, the mounted volume in Docker. */
+const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data.local');
+/** The committed example, copied into DATA_DIR the first time it is empty. */
 const SEED_DIR = process.env.SEED_DIR || path.join(ROOT, 'data');
 const SITE_FILE = path.join(DATA_DIR, 'site.json');
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
