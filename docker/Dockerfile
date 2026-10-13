@@ -1,7 +1,13 @@
 # gilloffline — nginx (TLS + reverse proxy) in front of a dependency-free Node app.
 FROM node:22-alpine
 
-RUN apk add --no-cache nginx su-exec
+# 官方源 dl-cdn.alpinelinux.org 在国内基本连不通（apk add 会一直卡到超时），
+# 换成国内镜像。只替换域名、保留 /alpine/v3.xx/... 路径，这样基础镜像换 Alpine
+# 版本也不会失效。出国构建想换回官方源：
+#   docker build --build-arg APK_MIRROR=dl-cdn.alpinelinux.org ...
+ARG APK_MIRROR=mirrors.aliyun.com
+RUN sed -i "s|dl-cdn.alpinelinux.org|${APK_MIRROR}|g" /etc/apk/repositories \
+  && apk add --no-cache nginx su-exec
 
 WORKDIR /app
 
