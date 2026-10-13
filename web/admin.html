@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>管理页 · Gill Offline</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/assets/logo.svg" />
+    <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/showcase.css" />
+    <link rel="stylesheet" href="/css/admin.css" />
+  </head>
+  <body>
+    <header class="site-header wrap">
+      <div class="brand">
+        <img class="brand__title" src="/assets/title.png" alt="Gill Offline" />
+        <span class="hint">管理页</span>
+      </div>
+      <div class="topbar-actions" id="topbar-actions" hidden>
+        <span class="dirty-flag" id="dirty-flag" hidden>未保存</span>
+        <button class="btn btn--primary" id="btn-add" type="button">＋ 添加格子</button>
+        <button class="btn" id="btn-save" type="button">保存</button>
+        <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">预览主页</a>
+        <button class="btn btn--ghost" id="btn-export" type="button">导出</button>
+        <button class="btn btn--ghost" id="btn-import" type="button">导入</button>
+        <button class="btn btn--ghost" id="btn-logout" type="button">退出</button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden />
+      </div>
+    </header>
+
+    <main class="wrap admin-wrap">
+      <!-- ------------------------------------------------------- login -->
+      <section class="login-card" id="login-view" hidden>
+        <img class="login-card__logo" src="/assets/logo.svg" alt="" />
+        <h1>管理页</h1>
+        <p class="hint" id="login-hint">请输入部署时通过环境变量配置的管理密码。</p>
+        <form id="login-form">
+          <input
+            class="input"
+            id="login-password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="管理密码"
+            required
+          />
+          <button class="btn btn--primary" type="submit" id="login-submit">登录</button>
+        </form>
+        <p class="hint login-card__error" id="login-error" hidden></p>
+      </section>
+
+      <!-- --------------------------------------------------------- app -->
+      <section id="app-view" hidden>
+        <details class="panel" id="site-panel">
+          <summary>站点信息</summary>
+          <div class="panel__body">
+            <div class="field">
+              <label for="site-title">站点标题</label>
+              <input class="input" id="site-title" data-site="title" />
+            </div>
+            <div class="field">
+              <label for="site-accent">主题强调色</label>
+              <input class="input" id="site-accent" type="color" data-site="accent" />
+            </div>
+            <div class="field field--wide">
+              <label for="site-subtitle">副标题</label>
+              <input class="input" id="site-subtitle" data-site="subtitle" />
+            </div>
+            <div class="field field--wide">
+              <label for="site-footer">页脚文字</label>
+              <input class="input" id="site-footer" data-site="footer" />
+            </div>
+          </div>
+        </details>
+
+        <div class="admin-toolbar">
+          <strong id="cell-count"></strong>
+          <span class="hint">拖动格子左上角的 ⠿ 可排序，悬浮格子后可编辑 / 复制 / 删除</span>
+        </div>
+
+        <div class="grid admin-grid" id="list"></div>
+      </section>
+    </main>
+
+    <div class="scrim" id="scrim" hidden></div>
+
+    <!-- ---------------------------------------------------- editor drawer -->
+    <aside class="drawer" id="drawer" hidden aria-label="格子编辑">
+      <div class="drawer__head">
+        <strong id="drawer-title">编辑格子</strong>
+        <button class="btn btn--icon btn--ghost" id="drawer-close" type="button" aria-label="关闭">✕</button>
+      </div>
+
+      <div class="drawer__preview">
+        <div class="grid" id="preview"></div>
+      </div>
+
+      <div class="drawer__body">
+        <fieldset class="fieldset">
+          <legend>基本</legend>
+          <div class="field">
+            <label for="ed-type">格子类型</label>
+            <select class="input" id="ed-type">
+              <option value="image">有内容格子（展示图片）</option>
+              <option value="solid">纯色格子</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>尺寸</label>
+            <div class="size-picker" id="ed-sizes"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="ed-border-width">边框粗细 (px)</label>
+              <input class="input" id="ed-border-width" type="number" min="0" max="20" step="1" />
+            </div>
+            <div class="field">
+              <label for="ed-radius">圆角 (px)</label>
+              <input class="input" id="ed-radius" type="number" min="0" max="64" step="1" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="ed-border-color">边框颜色</label>
+            <div class="color-row">
+              <input class="input" id="ed-border-color" type="color" />
+              <input class="input" id="ed-border-color-text" type="text" spellcheck="false" placeholder="#7e46b9" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="fieldset" id="fs-image">
+          <legend>图片内容</legend>
+          <div class="field">
+            <label for="ed-image">图片地址</label>
+            <input class="input" id="ed-image" type="text" spellcheck="false" placeholder="https://… 或上传" />
+          </div>
+          <div class="upload-picker">
+            <button class="btn" id="btn-upload" type="button">上传图片</button>
+            <button class="btn btn--ghost" id="btn-clear-upload" type="button">清空图片</button>
+            <input type="file" id="upload-file" accept="image/*" hidden />
+          </div>
+          <div class="thumb-current" id="thumb-current" hidden>
+            <img id="thumb-img" alt="" />
+            <span class="hint" id="thumb-name"></span>
+          </div>
+          <div class="field">
+            <label for="ed-fit">填充方式</label>
+            <select class="input" id="ed-fit">
+              <option value="cover">裁切填满（cover）</option>
+              <option value="contain">完整显示（contain）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="ed-image-title">图片角标文字（常显，可留空）</label>
+            <input class="input" id="ed-image-title" type="text" />
+          </div>
+          <div class="field">
+            <label for="ed-image-title-color">角标文字颜色</label>
+            <div class="color-row">
+              <input class="input" id="ed-image-title-color" type="color" />
+              <input class="input" id="ed-image-title-color-text" type="text" spellcheck="false" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="fieldset" id="fs-solid">
+          <legend>纯色</legend>
+          <div class="field">
+            <label for="ed-color">底色</label>
+            <div class="color-row">
+              <input class="input" id="ed-color" type="color" />
+              <input class="input" id="ed-color-text" type="text" spellcheck="false" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <legend>悬浮详情</legend>
+          <label class="check">
+            <input type="checkbox" id="ed-ov-enabled" />
+            鼠标悬浮时滑入详情
+          </label>
+          <div class="field">
+            <label for="ed-ov-title">详情标题</label>
+            <input class="input" id="ed-ov-title" type="text" />
+          </div>
+          <div class="field">
+            <label for="ed-ov-body">详情内容</label>
+            <textarea class="input" id="ed-ov-body" rows="4"></textarea>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="ed-ov-dir">滑入方向</label>
+              <select class="input" id="ed-ov-dir"></select>
+            </div>
+            <div class="field">
+              <label for="ed-ov-ratio">覆盖比例</label>
+              <select class="input" id="ed-ov-ratio"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="ed-ov-bg">详情背景色</label>
+            <div class="color-row">
+              <input class="input" id="ed-ov-bg" type="color" />
+              <input class="input" id="ed-ov-bg-text" type="text" spellcheck="false" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="ed-ov-fg">详情文字颜色</label>
+            <div class="color-row">
+              <input class="input" id="ed-ov-fg" type="color" />
+              <input class="input" id="ed-ov-fg-text" type="text" spellcheck="false" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <legend>链接</legend>
+          <div class="field">
+            <label for="ed-link">点击后跳转（可留空）</label>
+            <input class="input" id="ed-link" type="url" spellcheck="false" placeholder="https://github.com/…" />
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="drawer__foot">
+        <button class="btn btn--danger" id="ed-delete" type="button">删除格子</button>
+        <button class="btn btn--primary" id="ed-done" type="button">完成</button>
+      </div>
+    </aside>
+
+    <script type="module" src="/js/admin.js"></script>
+  </body>
+</html>

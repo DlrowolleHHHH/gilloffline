@@ -1,0 +1,15 @@
+{
+  "name": "gilloffline",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal showcase site: a window-grid of projects with a password-protected admin page.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

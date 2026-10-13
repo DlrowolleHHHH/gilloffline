@@ -1,0 +1,192 @@
+/* The showcase window grid, shared by the home page and the admin preview. */
+
+.site-subtitle {
+  max-width: 62ch;
+  margin: 6px auto 30px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14.5px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--cell));
+  grid-auto-rows: var(--cell);
+  gap: var(--gap);
+  justify-content: center;
+  grid-auto-flow: row dense;
+}
+
+/* spans: 方形 1x1 / 大方形 2x2 / 矩形 1x2 / 长矩形 1x4 / 大矩形 2x4 */
+.w1 { grid-column: span 1; }
+.w2 { grid-column: span 2; }
+.w4 { grid-column: span 4; }
+.h1 { grid-row: span 1; }
+.h2 { grid-row: span 2; }
+
+/* below 4 columns, wide cells shrink so they can never overflow the grid */
+@media (max-width: 700px) {
+  .w4 { grid-column: span 2; }
+}
+
+/* ------------------------------------------------------------------- cell */
+
+.cell {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--radius, 14px);
+  border-width: var(--bw, 2px);
+  border-style: solid;
+  border-color: var(--border, var(--accent));
+  background: var(--ink-700);
+  isolation: isolate;
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1), box-shadow 0.28s;
+}
+
+.cell--solid {
+  background: var(--solid, var(--accent));
+}
+
+.cell--link {
+  cursor: pointer;
+}
+
+.cell:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45),
+    0 0 0 1px color-mix(in srgb, var(--border, var(--accent)) 55%, transparent);
+}
+
+.cell__media {
+  position: absolute;
+  inset: 0;
+}
+
+.cell__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cell[data-fit='contain'] .cell__media img {
+  object-fit: contain;
+  padding: 10px;
+}
+
+/* caption that stays visible while the detail panel is hidden */
+.cell__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 18px 12px 10px;
+  background: linear-gradient(to top, rgba(4, 3, 8, 0.82), transparent);
+  color: var(--caption-fg, #fff);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --------------------------------------------------------- hover detail panel */
+
+.cell__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px;
+  background: var(--ov-bg, #0b0a12f2);
+  color: var(--ov-fg, #fff);
+  overflow: hidden;
+  transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+
+.cell__overlay-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.cell__overlay-body {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  opacity: 0.9;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cell--w2 .cell__overlay-title,
+.cell--w4 .cell__overlay-title {
+  font-size: clamp(14px, 1.15vw, 19px);
+}
+
+.cell--w2 .cell__overlay-body,
+.cell--w4 .cell__overlay-body {
+  font-size: clamp(12.5px, 1vw, 14.5px);
+}
+
+/* 1/1 — the panel covers the whole cell and slides in from `direction` */
+.cell__overlay[data-ratio='1/1'][data-dir='left'] { transform: translateX(-100%); }
+.cell__overlay[data-ratio='1/1'][data-dir='right'] { transform: translateX(100%); }
+.cell__overlay[data-ratio='1/1'][data-dir='top'] { transform: translateY(-100%); }
+.cell__overlay[data-ratio='1/1'][data-dir='bottom'] { transform: translateY(100%); }
+
+/* the half-width panel is cramped on 1x1 cells, so tighten it up */
+.cell__overlay[data-ratio='1/2'] {
+  padding: 10px;
+  gap: 4px;
+}
+
+/* 1/2 — the panel covers half of the cell, anchored to the side it enters from */
+.cell__overlay[data-ratio='1/2'][data-dir='left'] { width: 50%; justify-content: flex-start; transform: translateX(-100%); }
+.cell__overlay[data-ratio='1/2'][data-dir='right'] { width: 50%; left: auto; right: 0; justify-content: flex-start; transform: translateX(100%); }
+.cell__overlay[data-ratio='1/2'][data-dir='top'] { height: 50%; bottom: auto; justify-content: flex-start; transform: translateY(-100%); }
+.cell__overlay[data-ratio='1/2'][data-dir='bottom'] { height: 50%; justify-content: flex-start; transform: translateY(100%); }
+
+.cell:hover .cell__overlay,
+.cell:focus-visible .cell__overlay,
+.cell:focus-within .cell__overlay,
+.cell.is-open .cell__overlay {
+  transform: translate(0, 0);
+}
+
+/* tap support on touch screens */
+@media (hover: none) {
+  .cell__caption {
+    display: none;
+  }
+}
+
+/* ----------------------------------------------------------------- states */
+
+.grid-state {
+  padding: 64px 20px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.grid-state__logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 18px;
+  opacity: 0.55;
+}
+
+.grid-state a {
+  color: color-mix(in srgb, var(--accent) 60%, white);
+  text-decoration: underline;
+}

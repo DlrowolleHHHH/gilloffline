@@ -1,0 +1,11 @@
+.git
+.gitignore
+.DS_Store
+node_modules
+t
+build_run.sh
+README.md
+
+# runtime data is a volume, but the bundled example content must reach the image
+data/*
+!data/site.json

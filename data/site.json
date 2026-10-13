@@ -1,0 +1,195 @@
+{
+  "version": 1,
+  "site": {
+    "title": "Gill Offline",
+    "subtitle": "一个以橱窗格子陈列个人项目的角落。把鼠标放到格子上，看看里面写了什么。",
+    "footer": "Gill Offline · 用格子和图片说话",
+    "accent": "#7e46b9"
+  },
+  "cells": [
+    {
+      "id": "c00000000001",
+      "type": "solid",
+      "size": "2x4",
+      "borderColor": "#a06fe0",
+      "borderWidth": 2,
+      "radius": 18,
+      "image": "",
+      "imageFit": "cover",
+      "imageTitle": "",
+      "imageTitleColor": "#ffffff",
+      "color": "#7e46b9",
+      "link": "",
+      "overlay": {
+        "enabled": true,
+        "title": "欢迎来到你的橱窗",
+        "body": "整个页面由格子拼成，每个格子都可以在 /admin 里单独配置：尺寸、边框颜色、图片、悬浮详情。\n\n这块大矩形是 2x4，详情面板从左滑入并覆盖一半面积。",
+        "direction": "left",
+        "ratio": "1/2",
+        "bgColor": "#0b0a12f2",
+        "textColor": "#ffffff"
+      }
+    },
+    {
+      "id": "c00000000002",
+      "type": "solid",
+      "size": "1x1",
+      "borderColor": "#2a2438",
+      "borderWidth": 2,
+      "radius": 14,
+      "image": "",
+      "imageFit": "cover",
+      "imageTitle": "",
+      "imageTitleColor": "#ffffff",
+      "color": "#1d1929",
+      "link": "",
+      "overlay": {
+        "enabled": true,
+        "title": "方形 1x1",
+        "body": "最小的一格。",
+        "direction": "bottom",
+        "ratio": "1/1",
+        "bgColor": "#0b0a12f2",
+        "textColor": "#ffffff"
+      }
+    },
+    {
+      "id": "c00000000003",
+      "type": "image",
+      "size": "1x2",
+      "borderColor": "#7e46b9",
+      "borderWidth": 2,
+      "radius": 14,
+      "image": "/assets/title.png",
+      "imageFit": "contain",
+      "imageTitle": "有内容的格子",
+      "imageTitleColor": "#ffffff",
+      "color": "#7e46b9",
+      "link": "",
+      "overlay": {
+        "enabled": true,
+        "title": "矩形 1x2",
+        "body": "平时展示图片，鼠标悬浮后详情文字从下往上滑入。",
+        "direction": "bottom",
+        "ratio": "1/1",
+        "bgColor": "#171227f5",
+        "textColor": "#ffffff"
+      }
+    },
+    {
+      "id": "c00000000004",
+      "type": "image",
+      "size": "1x1",
+      "borderColor": "#3d3355",
+      "borderWidth": 2,
+      "radius": 14,
+      "image": "/assets/logo.svg",
+      "imageFit": "contain",
+      "imageTitle": "",
+      "imageTitleColor": "#ffffff",
+      "color": "#7e46b9",
+      "link": "",
+      "overlay": {
+        "enabled": true,
+        "title": "方形 1x1",
+        "body": "上传你自己的图片。",
+        "direction": "top",
+        "ratio": "1/1",
+        "bgColor": "#0b0a12f2",
+        "textColor": "#ffffff"
+      }
+    },
+    {
+      "id": "c00000000005",
+      "type": "solid",
+      "size": "2x2",
+      "borderColor": "#46b97e",
+      "borderWidth": 2,
+      "radius": 16,
+      "image": "",
+      "imageFit": "cover",
+      "imageTitle": "",
+      "imageTitleColor": "#ffffff",
+      "color": "#12251d",
+      "link": "",
+      "overlay": {
+        "enabled": true,
+        "title": "大方形 2x2",
+        "body": "纯色格子也可以有悬浮详情。",
+        "direction": "right",
+        "ratio": "1/2",
+        "bgColor": "#0f2a1ff2",
+        "textColor": "#dff5e9"
+      }
+    },
+    {
+      "id": "c00000000006",
+      "type": "image",
+      "size": "1x4",
+      "borderColor": "#7e46b9",
+      "borderWidth": 2,
+      "radius": 14,
+      "image": "/assets/title.png",
+      "imageFit": "contain",
+      "imageTitle": "长矩形 1x4",
+      "imageTitleColor": "#ffffff",
+      "color": "#7e46b9",
+      "link": "",
+      "overlay": {
+        "enabled": true,
+        "title": "长矩形 1x4",
+        "body": "一整条横幅，适合放横幅图或者一句标语。",
+        "direction": "bottom",
+        "ratio": "1/1",
+        "bgColor": "#0b0a12f2",
+        "textColor": "#ffffff"
+      }
+    },
+    {
+      "id": "c00000000007",
+      "type": "solid",
+      "size": "1x1",
+      "borderColor": "#a06fe0",
+      "borderWidth": 2,
+      "radius": 14,
+      "image": "",
+      "imageFit": "cover",
+      "imageTitle": "",
+      "imageTitleColor": "#ffffff",
+      "color": "#7e46b9",
+      "link": "",
+      "overlay": {
+        "enabled": true,
+        "title": "纯色",
+        "body": "用来补位、留白。",
+        "direction": "left",
+        "ratio": "1/1",
+        "bgColor": "#0b0a12f2",
+        "textColor": "#ffffff"
+      }
+    },
+    {
+      "id": "c00000000008",
+      "type": "solid",
+      "size": "1x2",
+      "borderColor": "#2a2438",
+      "borderWidth": 2,
+      "radius": 14,
+      "image": "",
+      "imageFit": "cover",
+      "imageTitle": "",
+      "imageTitleColor": "#ffffff",
+      "color": "#15121f",
+      "link": "",
+      "overlay": {
+        "enabled": true,
+        "title": "去 /admin 把它换掉",
+        "body": "登录后可以编辑、添加、删除、拖拽排序格子，也可以导出 / 导入整份配置。",
+        "direction": "bottom",
+        "ratio": "1/1",
+        "bgColor": "#241d38f5",
+        "textColor": "#ffffff"
+      }
+    }
+  ]
+}
