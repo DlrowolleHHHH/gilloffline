@@ -15,7 +15,6 @@
       <div class="brand">
         <img class="brand__title" src="/assets/title.png" alt="Gill Offline" />
       </div>
-      <a class="btn btn--ghost" href="/admin" rel="nofollow">管理</a>
     </header>
 
     <main class="wrap">
@@ -24,10 +23,14 @@
     </main>
 
     <footer class="site-footer wrap">
-      <img class="site-footer__logo" src="/assets/logo.svg" alt="" />
-      <span id="footer-text"></span>
-      <span class="site-footer__spacer"></span>
-      <a href="/admin" rel="nofollow">管理页</a>
+      <div class="site-footer__side">
+        <img class="site-footer__logo" src="/assets/logo.svg" alt="" />
+        <span class="site-footer__text" id="footer-left"></span>
+      </div>
+      <div class="site-footer__center" id="footer-center"></div>
+      <div class="site-footer__side site-footer__side--right">
+        <span class="site-footer__text" id="footer-right"></span>
+      </div>
     </footer>
 
     <script type="module" src="/js/home.js"></script>

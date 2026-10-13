@@ -3,33 +3,13 @@
   "site": {
     "title": "Gill Offline",
     "subtitle": "一个以橱窗格子陈列个人项目的角落。把鼠标放到格子上，看看里面写了什么。",
-    "footer": "Gill Offline · 用格子和图片说话",
+    "subtitleEnabled": false,
+    "footerLeft": "Gill Offline",
+    "icp": "",
+    "footerRight": "",
     "accent": "#7e46b9"
   },
   "cells": [
-    {
-      "id": "c00000000001",
-      "type": "solid",
-      "size": "2x4",
-      "borderColor": "#a06fe0",
-      "borderWidth": 2,
-      "radius": 18,
-      "image": "",
-      "imageFit": "cover",
-      "imageTitle": "",
-      "imageTitleColor": "#ffffff",
-      "color": "#7e46b9",
-      "link": "",
-      "overlay": {
-        "enabled": true,
-        "title": "欢迎来到你的橱窗",
-        "body": "整个页面由格子拼成，每个格子都可以在 /admin 里单独配置：尺寸、边框颜色、图片、悬浮详情。\n\n这块大矩形是 2x4，详情面板从左滑入并覆盖一半面积。",
-        "direction": "left",
-        "ratio": "1/2",
-        "bgColor": "#0b0a12f2",
-        "textColor": "#ffffff"
-      }
-    },
     {
       "id": "c00000000002",
       "type": "solid",
@@ -130,7 +110,7 @@
       "borderWidth": 2,
       "radius": 14,
       "image": "/assets/title.png",
-      "imageFit": "contain",
+      "imageFit": "cover",
       "imageTitle": "长矩形 1x4",
       "imageTitleColor": "#ffffff",
       "color": "#7e46b9",
@@ -164,6 +144,29 @@
         "body": "用来补位、留白。",
         "direction": "left",
         "ratio": "1/1",
+        "bgColor": "#0b0a12f2",
+        "textColor": "#ffffff"
+      }
+    },
+    {
+      "id": "c00000000001",
+      "type": "solid",
+      "size": "2x4",
+      "borderColor": "#a06fe0",
+      "borderWidth": 2,
+      "radius": 18,
+      "image": "",
+      "imageFit": "cover",
+      "imageTitle": "",
+      "imageTitleColor": "#ffffff",
+      "color": "#7e46b9",
+      "link": "",
+      "overlay": {
+        "enabled": true,
+        "title": "欢迎来到你的橱窗",
+        "body": "整个页面由格子拼成，每个格子都可以在 /admin 里单独配置：尺寸、边框颜色、图片、悬浮详情。\n\n这块大矩形是 2x4，详情面板从左滑入并覆盖一半面积。",
+        "direction": "left",
+        "ratio": "1/2",
         "bgColor": "#0b0a12f2",
         "textColor": "#ffffff"
       }

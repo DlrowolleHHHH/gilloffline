@@ -20,7 +20,7 @@ COPY data/site.json /app/seed/site.json
 COPY docker/nginx.http.conf.template docker/nginx.https.conf.template /etc/gilloffline/
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh \
-  && mkdir -p /data /run/nginx /var/www/acme \
+  && mkdir -p /data /run/nginx /var/www/acme /app/ssl \
   && chown -R node:node /data
 
 ENV NODE_ENV=production \

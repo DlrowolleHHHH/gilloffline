@@ -121,7 +121,14 @@ function normalizeDoc(raw) {
     site: {
       title: clampText(site.title, MAX_TITLE) || 'Gill Offline',
       subtitle: clampText(site.subtitle, MAX_TITLE),
-      footer: clampText(site.footer, MAX_TITLE),
+      // the title bar stays hidden until the admin explicitly turns it on
+      subtitleEnabled: site.subtitleEnabled === true,
+      // the footer is three slots, laid out left / centre / right; the centre
+      // one carries the ICP filing number. `footer` is the pre-3-slot key.
+      footerLeft: clampText(site.footerLeft ?? site.footer, MAX_TITLE),
+      // trimmed: whitespace-only must not read as "the admin already set one"
+      icp: clampText(site.icp, MAX_TITLE).trim(),
+      footerRight: clampText(site.footerRight, MAX_TITLE),
       accent: safeColor(site.accent, '#7e46b9'),
     },
     cells,
@@ -131,6 +138,20 @@ function normalizeDoc(raw) {
 /* --------------------------------------------------------------- file i/o */
 
 let writeChain = Promise.resolve();
+
+/**
+ * Deployment default: ICP_NUMBER fills the footer's centre slot for as long as
+ * the stored value is empty. Once the admin saves a number the stored one wins,
+ * and clearing the field hands control back to the environment.
+ *
+ * The overlay is applied on the way out only — never persisted — so the env
+ * value cannot quietly freeze itself into site.json.
+ */
+function applyEnvDefaults(doc) {
+  const icp = clampText(process.env.ICP_NUMBER, MAX_TITLE).trim();
+  if (!icp || doc.site.icp) return doc;
+  return { ...doc, site: { ...doc.site, icp, icpFromEnv: true } };
+}
 
 function ensureDirs() {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -150,10 +171,10 @@ function seedIfMissing() {
 function read() {
   seedIfMissing();
   try {
-    return normalizeDoc(JSON.parse(fs.readFileSync(SITE_FILE, 'utf8')));
+    return applyEnvDefaults(normalizeDoc(JSON.parse(fs.readFileSync(SITE_FILE, 'utf8'))));
   } catch (err) {
     console.error('[store] site.json unreadable (%s), falling back to seed', err.message);
-    return normalizeDoc({});
+    return applyEnvDefaults(normalizeDoc({}));
   }
 }
 
@@ -168,7 +189,10 @@ function write(rawDoc) {
         const tmp = SITE_FILE + '.' + process.pid + '.tmp';
         fs.writeFile(tmp, payload, (err) => {
           if (err) return reject(err);
-          fs.rename(tmp, SITE_FILE, (renameErr) => (renameErr ? reject(renameErr) : resolve(doc)));
+          // resolve with the same shape a read would hand out, env overlay included
+          fs.rename(tmp, SITE_FILE, (renameErr) =>
+            renameErr ? reject(renameErr) : resolve(applyEnvDefaults(doc))
+          );
         });
       })
   );

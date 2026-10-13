@@ -1,4 +1,4 @@
-# Rendered by docker/entrypoint.sh when a certificate is present in /ssl.
+# Rendered by docker/entrypoint.sh when a certificate is present in /app/ssl.
 # ${SERVER_NAME}, ${SSL_CERT_FILE} and ${SSL_KEY_FILE} are substituted at start-up.
 
 worker_processes auto;
@@ -52,8 +52,8 @@ http {
     http2 on;
     server_name ${SERVER_NAME};
 
-    ssl_certificate     /ssl/${SSL_CERT_FILE};
-    ssl_certificate_key /ssl/${SSL_KEY_FILE};
+    ssl_certificate     /app/ssl/${SSL_CERT_FILE};
+    ssl_certificate_key /app/ssl/${SSL_KEY_FILE};
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_session_cache shared:SSL:10m;

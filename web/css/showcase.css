@@ -1,4 +1,4 @@
-/* The showcase window grid, shared by the home page and the admin preview. */
+/* The showcase window grid, shared by the home page and the editor preview. */
 
 .site-subtitle {
   max-width: 62ch;
@@ -184,9 +184,4 @@
   height: 64px;
   margin: 0 auto 18px;
   opacity: 0.55;
-}
-
-.grid-state a {
-  color: color-mix(in srgb, var(--accent) 60%, white);
-  text-decoration: underline;
 }

@@ -1,4 +1,4 @@
-# Fallback used by docker/entrypoint.sh when no certificate is mounted in /ssl,
+# Fallback used by docker/entrypoint.sh when no certificate is mounted in /app/ssl,
 # so the container always comes up instead of crash-looping.
 
 worker_processes auto;

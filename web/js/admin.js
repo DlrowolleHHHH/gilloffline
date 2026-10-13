@@ -66,19 +66,47 @@ function showApp() {
 
 /* --------------------------------------------------------------- site meta */
 
+/** The ICP number the server took from the ICP_NUMBER env var, for the hint. */
+let envIcp = '';
+
+/**
+ * An ICP number served from the ICP_NUMBER env var is a fallback, not stored
+ * content: drop it from the document we hold so that saving the panel for some
+ * unrelated reason cannot quietly freeze it into site.json.
+ */
+function absorbDoc(doc) {
+  const fromEnv = doc.site?.icpFromEnv === true;
+  if (fromEnv) {
+    envIcp = doc.site.icp;
+    doc.site.icp = '';
+  } else {
+    envIcp = '';
+  }
+  return doc;
+}
+
 function renderSite() {
+  const site = state.doc.site || {};
   for (const input of document.querySelectorAll('[data-site]')) {
     const key = input.dataset.site;
-    input.value = state.doc.site?.[key] ?? (key === 'accent' ? '#7e46b9' : '');
+    if (input.type === 'checkbox') input.checked = site[key] === true;
+    else input.value = site[key] ?? (key === 'accent' ? '#7e46b9' : '');
+  }
+
+  const hint = $('icp-env-hint');
+  hint.hidden = !site.icpFromEnv;
+  if (site.icpFromEnv) {
+    hint.textContent = `主页当前显示的是环境变量 ICP_NUMBER 里的「${envIcp}」，在上面填写并保存即可覆盖它。`;
   }
 }
 
 function bindSitePanel() {
   for (const input of document.querySelectorAll('[data-site]')) {
-    input.addEventListener('input', () => {
+    const isToggle = input.type === 'checkbox';
+    input.addEventListener(isToggle ? 'change' : 'input', () => {
       const key = input.dataset.site;
       state.doc.site = state.doc.site || {};
-      state.doc.site[key] = input.value;
+      state.doc.site[key] = isToggle ? input.checked : input.value;
       if (key === 'accent') document.documentElement.style.setProperty('--accent', input.value);
       markDirty();
     });
@@ -535,7 +563,7 @@ async function save() {
   button.disabled = true;
   try {
     const saved = await api('/api/site', { method: 'PUT', body: state.doc });
-    state.doc = saved;
+    state.doc = absorbDoc(saved);
     state.dirty = false;
     $('dirty-flag').hidden = true;
     renderSite();
@@ -625,7 +653,7 @@ function bindLogin() {
 
 async function start() {
   const doc = await api('/api/site');
-  state.doc = doc;
+  state.doc = absorbDoc(doc);
   state.dirty = false;
   $('dirty-flag').hidden = true;
   showApp();

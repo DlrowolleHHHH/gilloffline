@@ -3,8 +3,9 @@
 个人项目橱窗站。主页用「格子」拼成一扇橱窗来陈列项目，管理页带密码，可以增删改格子和拖拽排序。
 
 - 主页 `/`：左上角是 `title.png`，下面是格子组成的橱窗；`logo.svg` 用作站点图标和页脚标记。
+  主页是纯展示的，页面上**没有任何管理入口**，只能靠直接输网址进管理页。
 - 管理页 `/admin`：密码来自部署时的环境变量 `ADMIN_PASSWORD`，登录后可编辑一切。
-- 部署：一个容器里跑 nginx（TLS + 反向代理）+ Node 应用，证书从宿主机挂载进 `/ssl`。
+- 部署：一个容器里跑 nginx（TLS + 反向代理）+ Node 应用，证书从宿主机 `/app/ssl` 挂载进容器同一个路径。
 
 ```
 .
@@ -50,6 +51,28 @@
 
 格子上还能配一个点击跳转链接。管理页支持导出 / 导入整份 JSON 配置，方便备份和迁移。
 
+## 站点信息
+
+管理页顶部的「站点信息」面板里可以改站点标题、主题强调色、标题栏文字，以及页脚的三块文字。
+
+标题栏是主页 Logo 下方的那句话，**默认不显示**；勾选「在主页显示标题栏」并保存后才会出现在主页上。
+
+### 页脚
+
+页脚分左 / 中 / 右三块，都在管理页里改：
+
+- **左侧**：Logo 后面的站点署名。
+- **中间**：ICP 备案号，永远居中、优先显示；两侧文字太长时会各自横向滑动，不会把中间挤走。
+- **右侧**：补充文字（版权之类），留空就不显示。
+
+备案号也可以在部署时用环境变量塞进去，不用登录管理页：
+
+```bash
+ICP_NUMBER='京ICP备00000000号' ./build_run.sh
+```
+
+环境变量只在管理页里没填过备案号时生效；管理页里填过就以管理页的为准，把管理页里那个框清空又会退回环境变量。
+
 ## 本地开发
 
 不需要安装任何依赖：
@@ -79,11 +102,11 @@ ADMIN_PASSWORD=dev node server/index.js
 
 ### 证书
 
-把你的证书放进宿主机的 `/ssl` 目录，容器把它挂载为 `/ssl`（只读）：
+把你的证书放进宿主机的 `/app/ssl` 目录，容器挂载到同一个路径（只读）：
 
 ```
-/ssl/fullchain.pem     # 证书链
-/ssl/privkey.pem       # 私钥
+/app/ssl/gilloffline.online.pem     # 证书链（含中间证书）
+/app/ssl/gilloffline.online.key     # 私钥
 ```
 
 文件名不一样就改环境变量：
@@ -96,19 +119,20 @@ SSL_CERT_FILE=example.com.crt SSL_KEY_FILE=example.com.key ./build_run.sh
 **如果没找到证书，容器照样会启动**，只是只监听 80 端口并打印提示——不会因为证书没放好就起不来。
 放好证书后重新跑一次 `./build_run.sh` 即可。
 
-> macOS 的根分区是只读的，无法创建 `/ssl`。在 Mac 上测试请指定别的目录：
-> `HOST_SSL_DIR=$HOME/certs ./build_run.sh`。
+> macOS 的根分区是只读的，无法创建 `/app`。在 Mac 上测试请指定别的目录：
+> `HOST_SSL_DIR=$HOME/certs ./build_run.sh`（容器里还是挂在 `/app/ssl`）。
 
 ### 可用环境变量
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `ADMIN_PASSWORD` | 无（必填） | 管理页密码。不设置时管理功能整体禁用，不会退化成默认密码 |
+| `ICP_NUMBER` | 无 | 页脚中间的 ICP 备案号；管理页里没填过时生效 |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | 宿主机映射端口 |
-| `HOST_SSL_DIR` | `/ssl` | 宿主机证书目录，挂载为容器内 `/ssl` |
+| `HOST_SSL_DIR` | `/app/ssl` | 宿主机证书目录，容器内挂在同一个路径 |
 | `HOST_DATA_DIR` | `./data` | 宿主机数据目录，挂载为容器内 `/data` |
 | `SERVER_NAME` | `_` | nginx `server_name`，填你的域名 |
-| `SSL_CERT_FILE` / `SSL_KEY_FILE` | `fullchain.pem` / `privkey.pem` | 证书文件名 |
+| `SSL_CERT_FILE` / `SSL_KEY_FILE` | `gilloffline.online.pem` / `gilloffline.online.key` | 证书文件名 |
 | `CONTAINER_NAME` / `IMAGE_NAME` / `IMAGE_TAG` | `gilloffline` | 容器与镜像名 |
 | `TZ` | `Asia/Shanghai` | 容器时区 |
 

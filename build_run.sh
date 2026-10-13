@@ -22,11 +22,11 @@ CONTAINER_NAME="${CONTAINER_NAME:-gilloffline}"
 HTTP_PORT="${HTTP_PORT:-80}"
 HTTPS_PORT="${HTTPS_PORT:-443}"
 
-# Directory on the host that holds the certificates. The container always sees
-# it as /ssl — drop fullchain.pem + privkey.pem (or your own names, see below) here.
-HOST_SSL_DIR="${HOST_SSL_DIR:-/ssl}"
-SSL_CERT_FILE="${SSL_CERT_FILE:-fullchain.pem}"
-SSL_KEY_FILE="${SSL_KEY_FILE:-privkey.pem}"
+# Directory on the host that holds the certificates. The container mounts it at
+# the very same path, /app/ssl — drop the certificate + key there (names below).
+HOST_SSL_DIR="${HOST_SSL_DIR:-/app/ssl}"
+SSL_CERT_FILE="${SSL_CERT_FILE:-gilloffline.online.pem}"
+SSL_KEY_FILE="${SSL_KEY_FILE:-gilloffline.online.key}"
 
 # Grid content + uploaded images live here, outside the image.
 HOST_DATA_DIR="${HOST_DATA_DIR:-$(cd "$(dirname "$0")" && pwd)/data}"
@@ -34,6 +34,9 @@ HOST_DATA_DIR="${HOST_DATA_DIR:-$(cd "$(dirname "$0")" && pwd)/data}"
 # nginx server_name — set this to your domain, e.g. SERVER_NAME=example.com
 SERVER_NAME="${SERVER_NAME:-_}"
 TZ="${TZ:-Asia/Shanghai}"
+
+# ICP 备案号（可选）：显示在主页页脚中间，管理页里填过的话以管理页为准
+ICP_NUMBER="${ICP_NUMBER:-}"
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$REPO_DIR"
@@ -95,7 +98,7 @@ fi
 if [ ! -d "$HOST_SSL_DIR" ]; then
   mkdir -p "$HOST_SSL_DIR" 2>/dev/null || die "无法创建证书目录 $HOST_SSL_DIR
   请手动创建（可能需要 sudo），或指定其它目录：HOST_SSL_DIR=/path/to/certs ./build_run.sh
-  注意：macOS 的根分区是只读的，无法创建 /ssl，请改用其它路径。"
+  注意：macOS 的根分区是只读的，无法创建 /app，请改用其它路径。"
   warn "已创建证书目录 $HOST_SSL_DIR"
 fi
 
@@ -132,11 +135,12 @@ docker run -d \
   -p "${HTTP_PORT}:80" \
   -p "${HTTPS_PORT}:443" \
   -e "ADMIN_PASSWORD=${ADMIN_PASSWORD}" \
+  -e "ICP_NUMBER=${ICP_NUMBER}" \
   -e "SERVER_NAME=${SERVER_NAME}" \
   -e "SSL_CERT_FILE=${SSL_CERT_FILE}" \
   -e "SSL_KEY_FILE=${SSL_KEY_FILE}" \
   -e "TZ=${TZ}" \
-  -v "${HOST_SSL_DIR}:/ssl:ro" \
+  -v "${HOST_SSL_DIR}:/app/ssl:ro" \
   -v "${HOST_DATA_DIR}:/data" \
   "${IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
 
@@ -156,5 +160,5 @@ else
   ok "主页: http://<服务器地址>:${HTTP_PORT}/    管理页: http://<服务器地址>:${HTTP_PORT}/admin"
 fi
 echo "  数据目录: ${HOST_DATA_DIR}"
-echo "  证书目录: ${HOST_SSL_DIR} -> /ssl"
+echo "  证书目录: ${HOST_SSL_DIR} -> /app/ssl"
 echo "  查看日志: ./build_run.sh --logs"

@@ -1,5 +1,5 @@
 /**
- * Cell vocabulary + DOM builder shared by the home page and the admin editor.
+ * Cell vocabulary + DOM builder shared by the showcase page and the editor.
  */
 
 export const SIZES = {

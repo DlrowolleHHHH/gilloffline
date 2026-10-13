@@ -1,14 +1,14 @@
 #!/bin/sh
-# Starts nginx (TLS termination, from the certificates mounted in /ssl) and the
+# Starts nginx (TLS termination, from the certificates mounted in /app/ssl) and the
 # Node application behind it. Rendering the nginx config happens here so the
 # certificate filenames can come from the environment.
 set -e
 
 DATA_DIR="${DATA_DIR:-/data}"
-SSL_DIR="${SSL_DIR:-/ssl}"
+SSL_DIR="${SSL_DIR:-/app/ssl}"
 SERVER_NAME="${SERVER_NAME:-_}"
-SSL_CERT_FILE="${SSL_CERT_FILE:-fullchain.pem}"
-SSL_KEY_FILE="${SSL_KEY_FILE:-privkey.pem}"
+SSL_CERT_FILE="${SSL_CERT_FILE:-gilloffline.online.pem}"
+SSL_KEY_FILE="${SSL_KEY_FILE:-gilloffline.online.key}"
 TEMPLATE_DIR=/etc/gilloffline
 
 mkdir -p "$DATA_DIR" /run/nginx /var/log/nginx /var/www/acme
@@ -37,7 +37,7 @@ else
   echo "[entrypoint]   $CERT"
   echo "[entrypoint]   $KEY"
   echo "[entrypoint] Starting in HTTP-only mode. Drop your certificate files into"
-  echo "[entrypoint] the mounted /ssl directory (or point SSL_CERT_FILE / SSL_KEY_FILE"
+  echo "[entrypoint] the mounted /app/ssl directory (or point SSL_CERT_FILE / SSL_KEY_FILE"
   echo "[entrypoint] at the right names) and restart the container to serve HTTPS."
   echo "[entrypoint] --------------------------------------------------------------"
 fi

@@ -13,13 +13,8 @@ function renderEmpty() {
   logo.alt = '';
 
   const text = document.createElement('p');
-  text.textContent = '橱窗还是空的，';
+  text.textContent = '橱窗还在布置中，过阵子再来看看。';
 
-  const link = document.createElement('a');
-  link.href = '/admin';
-  link.textContent = '去管理页添加第一个格子';
-
-  text.append(link);
   state.append(logo, text);
   grid.append(state);
 }
@@ -28,12 +23,16 @@ function applySite(site) {
   document.title = site.title || 'Gill Offline';
   document.documentElement.style.setProperty('--accent', site.accent || '#7e46b9');
 
+  // the title bar is opt-in: it only shows once the site settings switch it on
   const subtitle = document.getElementById('subtitle');
-  subtitle.textContent = site.subtitle || '';
-  subtitle.hidden = !site.subtitle;
+  const subtitleText = site.subtitleEnabled ? site.subtitle || '' : '';
+  subtitle.textContent = subtitleText;
+  subtitle.hidden = !subtitleText;
 
-  const footer = document.getElementById('footer-text');
-  footer.textContent = site.footer || `© ${new Date().getFullYear()} ${site.title || 'Gill Offline'}`;
+  // footer: three independent slots, each left empty when it has no text
+  document.getElementById('footer-left').textContent = site.footerLeft || '';
+  document.getElementById('footer-center').textContent = site.icp || '';
+  document.getElementById('footer-right').textContent = site.footerRight || '';
 }
 
 async function boot() {

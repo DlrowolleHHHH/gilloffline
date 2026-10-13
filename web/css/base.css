@@ -106,27 +106,47 @@ img {
   filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.45));
 }
 
+/* Three slots: left / centre / right. The centre (ICP filing number) keeps its
+   natural width and stays centred; the side slots shrink and scroll instead. */
 .site-footer {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   padding: 40px 0 34px;
   color: var(--text-dim);
   font-size: 13px;
 }
 
+.site-footer__side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.site-footer__center {
+  min-width: 0;
+  text-align: center;
+}
+
+/* free text: stays on one line and scrolls sideways rather than crowding the centre */
+.site-footer__text {
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  overscroll-behavior-x: contain;
+}
+
+.site-footer__side--right .site-footer__text {
+  margin-left: auto;
+}
+
 .site-footer__logo {
+  flex: none;
   width: 26px;
   height: 26px;
   opacity: 0.9;
-}
-
-.site-footer__spacer {
-  flex: 1;
-}
-
-.site-footer a:hover {
-  color: var(--text);
 }
 
 /* ----------------------------------------------------------------- controls */
