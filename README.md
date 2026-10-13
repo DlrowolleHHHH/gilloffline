@@ -130,6 +130,24 @@ SSL_CERT_FILE=example.com.crt SSL_KEY_FILE=example.com.key ./build_run.sh
 > macOS 的根分区是只读的，无法创建 `/app`。在 Mac 上测试请指定别的目录：
 > `HOST_SSL_DIR=$HOME/certs ./build_run.sh`（容器里还是挂在 `/app/ssl`）。
 
+#### 用 Let's Encrypt 自动续期
+
+容器里的 nginx 把 `/.well-known/acme-challenge/` 指向 `/var/www/acme`，宿主机目录对应 `HOST_ACME_DIR`（默认 `/var/www/acme`），
+所以在宿主机上装个 certbot 就能走 webroot 验证——申请和续期都不用停容器：
+
+```bash
+apt install -y certbot
+certbot certonly --webroot -w /var/www/acme -d example.com -d www.example.com
+
+# 把签好的证书复制到 /app/ssl，文件名和 SSL_CERT_FILE / SSL_KEY_FILE 对上
+cp -L /etc/letsencrypt/live/example.com/fullchain.pem /app/ssl/example.com.pem
+cp -L /etc/letsencrypt/live/example.com/privkey.pem   /app/ssl/example.com.key
+docker restart gilloffline
+```
+
+把最后三条命令存成一个脚本放进 `/etc/letsencrypt/renewal-hooks/deploy/`，
+certbot 自带的 `certbot.timer` 每次续期成功后都会自动调用它，容器随即换上新的证书，之后就不用管了。
+
 ### 可用环境变量
 
 | 变量 | 默认值 | 说明 |
@@ -138,6 +156,7 @@ SSL_CERT_FILE=example.com.crt SSL_KEY_FILE=example.com.key ./build_run.sh
 | `ICP_NUMBER` | 无 | 页脚中间的 ICP 备案号；管理页里没填过时生效 |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | 宿主机映射端口 |
 | `HOST_SSL_DIR` | `/app/ssl` | 宿主机证书目录，容器内挂在同一个路径 |
+| `HOST_ACME_DIR` | `/var/www/acme` | certbot 的 webroot 目录，挂载为容器内 `/var/www/acme` |
 | `HOST_DATA_DIR` | `./data.local` | 宿主机数据目录，挂载为容器内 `/data` |
 | `SERVER_NAME` | `_` | nginx `server_name`，填你的域名 |
 | `SSL_CERT_FILE` / `SSL_KEY_FILE` | `gilloffline.online.pem` / `gilloffline.online.key` | 证书文件名 |

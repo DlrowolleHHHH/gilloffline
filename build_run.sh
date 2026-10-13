@@ -30,6 +30,12 @@ HOST_SSL_DIR="${HOST_SSL_DIR:-/app/ssl}"
 SSL_CERT_FILE="${SSL_CERT_FILE:-gilloffline.online.pem}"
 SSL_KEY_FILE="${SSL_KEY_FILE:-gilloffline.online.key}"
 
+# certbot 的 webroot：容器里的 nginx 把 /.well-known/acme-challenge/ 指向
+# /var/www/acme，所以证书续期时在宿主机上跑
+#   certbot certonly --webroot -w "$HOST_ACME_DIR" -d 你的域名
+# 就能通过验证（HTTP-01），全程不用停容器。
+HOST_ACME_DIR="${HOST_ACME_DIR:-/var/www/acme}"
+
 # Grid content + uploaded images live here, outside the image. The repo's data/
 # holds only the committed example that seeds this directory — nothing writes there.
 HOST_DATA_DIR="${HOST_DATA_DIR:-$REPO_DIR/data.local}"
@@ -109,6 +115,7 @@ if [ ! -f "$HOST_SSL_DIR/$SSL_CERT_FILE" ] || [ ! -f "$HOST_SSL_DIR/$SSL_KEY_FIL
   warn "容器仍会启动，但只会监听 HTTP（80）。放好证书后重新运行本脚本即可启用 HTTPS。"
 fi
 
+mkdir -p "$HOST_ACME_DIR"
 mkdir -p "$HOST_DATA_DIR"
 if [ ! -f "$HOST_DATA_DIR/site.json" ]; then
   cp "$REPO_DIR/data/site.json" "$HOST_DATA_DIR/site.json"
@@ -152,6 +159,7 @@ docker run -d \
   -e "SSL_KEY_FILE=${SSL_KEY_FILE}" \
   -e "TZ=${TZ}" \
   -v "${HOST_SSL_DIR}:/app/ssl:ro" \
+  -v "${HOST_ACME_DIR}:/var/www/acme" \
   -v "${HOST_DATA_DIR}:/data" \
   "${IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
 
@@ -172,4 +180,5 @@ else
 fi
 echo "  数据目录: ${HOST_DATA_DIR}"
 echo "  证书目录: ${HOST_SSL_DIR} -> /app/ssl"
+echo "  ACME 目录: ${HOST_ACME_DIR} -> /var/www/acme"
 echo "  查看日志: ./build_run.sh --logs"

@@ -7,6 +7,10 @@ data/uploads/
 data/.session-secret
 data/site.json.*.tmp
 
+# 部署时在服务器上放的机密（例如 build_run.sh 用的 ADMIN_PASSWORD），不进 git
+.env
+.deploy.env
+
 # scratch
 t
 .DS_Store
