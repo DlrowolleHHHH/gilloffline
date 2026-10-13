@@ -130,6 +130,19 @@ img {
   text-align: center;
 }
 
+/* the filing number is a link out to the MIIT filing system */
+.site-footer__link {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.site-footer__link:hover {
+  color: var(--text);
+  text-decoration-color: currentColor;
+}
+
 /* free text: stays on one line and scrolls sideways rather than crowding the centre */
 .site-footer__text {
   min-width: 0;

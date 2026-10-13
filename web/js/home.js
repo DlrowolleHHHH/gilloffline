@@ -19,6 +19,27 @@ function renderEmpty() {
   grid.append(state);
 }
 
+/** Where the filing number points when the admin has not stored a link. */
+const ICP_LINK_DEFAULT = 'https://beian.miit.gov.cn/#/Integrated/index';
+
+/** The centre slot is the ICP filing number, linked out to the filing system. */
+function renderIcp(site) {
+  const center = document.getElementById('footer-center');
+  const icp = site.icp || '';
+  if (!icp) {
+    center.replaceChildren();
+    return;
+  }
+
+  const link = document.createElement('a');
+  link.className = 'site-footer__link';
+  link.href = site.icpLink || ICP_LINK_DEFAULT;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = icp;
+  center.replaceChildren(link);
+}
+
 function applySite(site) {
   document.title = site.title || 'Gill Offline';
   document.documentElement.style.setProperty('--accent', site.accent || '#7e46b9');
@@ -31,7 +52,7 @@ function applySite(site) {
 
   // footer: three independent slots, each left empty when it has no text
   document.getElementById('footer-left').textContent = site.footerLeft || '';
-  document.getElementById('footer-center').textContent = site.icp || '';
+  renderIcp(site);
   document.getElementById('footer-right').textContent = site.footerRight || '';
 }
 

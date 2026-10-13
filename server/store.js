@@ -52,6 +52,12 @@ function safeNumber(value, min, max, fallback) {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+/** Links that leave the site (the ICP filing badge) must be absolute http(s). */
+function safeExternalUrl(value) {
+  const raw = clampText(value, MAX_URL).trim();
+  return /^https?:\/\//i.test(raw) ? raw : '';
+}
+
 /** Only relative asset paths, http(s) URLs and inline raster data URIs. */
 function safeUrl(value) {
   const raw = clampText(value, MAX_URL).trim();
@@ -128,6 +134,8 @@ function normalizeDoc(raw) {
       footerLeft: clampText(site.footerLeft ?? site.footer, MAX_TITLE),
       // trimmed: whitespace-only must not read as "the admin already set one"
       icp: clampText(site.icp, MAX_TITLE).trim(),
+      // empty means "use the filing system's default address", not "no link"
+      icpLink: safeExternalUrl(site.icpLink),
       footerRight: clampText(site.footerRight, MAX_TITLE),
       accent: safeColor(site.accent, '#7e46b9'),
     },
