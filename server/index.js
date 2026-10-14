@@ -14,6 +14,7 @@ const path = require('path');
 
 const store = require('./store');
 const api = require('./api');
+const db = require('./db');
 const users = require('./users');
 
 const PORT = Number(process.env.PORT || 3000);
@@ -163,6 +164,9 @@ const server = http.createServer((req, res) => {
 
 store.ensureDirs();
 store.seedIfMissing();
+// open (and create) the accounts database up front, so the schema is ready and
+// any old users.json / invites.json is imported before the first request
+db.get();
 
 server.listen(PORT, HOST, () => {
   console.log('[http] gilloffline listening on http://%s:%d', HOST, PORT);

@@ -201,7 +201,7 @@ ICP_NUMBER='京ICP备00000000号' ./build_run.sh
 
 ## 本地开发
 
-不需要安装任何依赖：
+不需要安装任何依赖（Node 要 **22.5 以上**——账号库用的是 Node 自带的 `node:sqlite`）：
 
 ```bash
 ADMIN_PASSWORD=dev node server/index.js
@@ -388,8 +388,7 @@ ADMIN_PASSWORD='你的密码' SERVER_NAME=example.com HOST_SSL_DIR=/etc/letsencr
 /app/data/assets/          # 站主自己的图片（logo.svg / title.png），首启从仓库播种
 /app/data/uploads/         # 站主上传的图片
 /app/data/pages/           # 站主上传的 HTML 页面（及其 css / js / 图片）
-/app/data/users.json       # 用户账号（用户名、userid、scrypt 密码哈希；含已删除的墓碑记录）
-/app/data/invites.json     # 邀请码和它们的次数
+/app/data/gilloffline.db   # 账号 + 邀请码（SQLite，见下）
 
 /app/users/<userid>/       # 每个子管理员的小站：site.json + assets/ + uploads/ + pages/
 /app/users/.deleted/       # 删除用户时归档的目录
@@ -409,6 +408,21 @@ cp -a /app/users /root/users-backup-$(date +%F)
 
 仓库里的 `data/site.json` 和 `assets/` 都不属于运行时数据：它们只是提交进 git 的初始内容，
 只在数据目录里还没有的时候被播种一次（`assets/` 只在那个目录不存在时才抄，之后删掉某个文件不会被重新塞回来）。
+
+### 账号数据库
+
+用户账号和邀请码存在 `/app/data/gilloffline.db` 里，用 Node 自带的 `node:sqlite` ——
+**不用装任何依赖**，也不用另外跑数据库服务。两张表：
+
+| 表 | 存什么 |
+| --- | --- |
+| `users` | userid、用户名（大小写不敏感的唯一索引，且**只约束未删除的行**）、注册时间、scrypt 盐和哈希；删除后留一条墓碑（`deleted_at` + 归档路径） |
+| `invites` | 邀请码、可用次数、已用次数、备注 |
+
+网站的**内容**仍然是一个个文件（`site.json`、`assets/`、`uploads/`、`pages/`），只有账号和邀请码进库 —— 编辑器和文件面板直接操作文件，不用跟着改。
+从更早的版本升级上来时，首次启动会自动把 `users.json` / `invites.json` 导进库，再把这两个文件改名成 `*.imported` 留档（确认无误后可以自己删）。
+
+数据库开的是 WAL 模式，所以目录里会多出 `gilloffline.db-wal` / `-shm`，备份时一起备。
 
 从旧版本升级上来时，`build_run.sh` 会把旧数据搬到 `/app/data`（旧目录原样留着不删，确认没问题后可以自己清理）：
 

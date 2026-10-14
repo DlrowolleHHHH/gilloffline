@@ -52,7 +52,9 @@ sed -e "s|\${SERVER_NAME}|$SERVER_NAME|g" \
 nginx -t
 
 # The application only ever listens on loopback; nginx is the public face.
-su-exec node node /app/server/index.js &
+# --disable-warning: node:sqlite (the accounts database) is still flagged
+# experimental, which is not worth a line in the logs on every start.
+su-exec node node --disable-warning=ExperimentalWarning /app/server/index.js &
 NODE_PID=$!
 
 nginx -g 'daemon off;' &

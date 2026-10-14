@@ -5,10 +5,8 @@
  *
  * Content lives one directory per user under USERS_DIR, laid out exactly like
  * the owner's data directory (site.json + assets/ + uploads/ + pages/), and is
- * served under /u/<userid>/…. Two small index files sit in the data directory:
- *
- *   users.json     who exists — name, id, password hash
- *   invites.json   the invite codes that gate registration, with their limits
+ * served under /u/<userid>/…. Who exists (accounts, including the tombstones a
+ * delete leaves) and the invite codes live in the SQLite database — see db.js.
  *
  * A userid is 64 hex characters: username hash (16) + registration time (32,
  * hex, zero padded) + random (16). It doubles as the directory name, so it is
@@ -20,11 +18,10 @@ const fs = require('fs');
 const path = require('path');
 
 const store = require('./store');
+const db = require('./db');
 
 const USERS_DIR = process.env.USERS_DIR || path.join(store.ROOT, 'users.local');
 const ARCHIVE_DIR = path.join(USERS_DIR, '.deleted');
-const INDEX_FILE = path.join(store.DATA_DIR, 'users.json');
-const INVITES_FILE = path.join(store.DATA_DIR, 'invites.json');
 
 const USERID_RE = /^[0-9a-f]{64}$/;
 const USERNAME_RE = /^[\p{L}\p{N}_-]{2,24}$/u;
@@ -73,42 +70,31 @@ function passwordMatches(record, password) {
   }
 }
 
-/* ------------------------------------------------------------- index files */
-
-function readJson(file, fallback) {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return parsed && typeof parsed === 'object' ? parsed : fallback;
-  } catch {
-    return fallback;
-  }
-}
+/* ------------------------------------------------------------- row shapes */
 
 /**
- * The account index: `users` are the live accounts, `deleted` are tombstones.
- * A tombstone keeps the whole record — password hash included — plus where the
- * content was archived, which is what makes a delete undoable.
+ * A `users` row → the account object the rest of the server passes around. A
+ * deleted account keeps its row (deleted_at set, `archive` pointing at where
+ * the content went) — that tombstone is what makes a delete undoable.
  */
-function readIndex() {
-  const data = readJson(INDEX_FILE, {});
-  const keep = (entry) => entry && isUserid(entry.userid);
-  return {
-    users: Array.isArray(data.users) ? data.users.filter(keep) : [],
-    deleted: Array.isArray(data.deleted) ? data.deleted.filter(keep) : [],
+const toAccount = (row) =>
+  row && {
+    userid: row.userid,
+    username: row.username,
+    createdAt: row.created_at,
+    password: { salt: row.pw_salt, hash: row.pw_hash },
+    deletedAt: row.deleted_at ?? undefined,
+    archive: row.archive || '',
   };
-}
 
-const writeIndex = (index) =>
-  store.writeJsonAtomic(INDEX_FILE, { version: 1, users: index.users, deleted: index.deleted });
-
-const readUsers = () => readIndex().users;
-
-const readInvites = () => {
-  const data = readJson(INVITES_FILE, { invites: [] });
-  return Array.isArray(data.invites) ? data.invites.filter((invite) => INVITE_RE.test(invite.code)) : [];
-};
-
-const writeInvites = (invites) => store.writeJsonAtomic(INVITES_FILE, { version: 1, invites });
+const toInvite = (row) =>
+  row && {
+    code: row.code,
+    maxUses: row.max_uses,
+    uses: row.uses,
+    note: row.note,
+    createdAt: row.created_at,
+  };
 
 /* ------------------------------------------------------------------- paths */
 
@@ -181,15 +167,21 @@ const publicUser = (user) => ({
 });
 
 function listUsers() {
-  return readUsers().map(publicUser).sort((a, b) => b.createdAt - a.createdAt);
+  return db
+    .sql('SELECT * FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC')
+    .all()
+    .map((row) => publicUser(toAccount(row)));
 }
 
-const findUser = (userid) => (isUserid(userid) ? readUsers().find((u) => u.userid === userid) : undefined);
+const findUser = (userid) =>
+  isUserid(userid)
+    ? toAccount(db.sql('SELECT * FROM users WHERE userid = ? AND deleted_at IS NULL').get(userid))
+    : undefined;
 
-const findByName = (username) => {
-  const key = nameKey(username || '');
-  return readUsers().find((user) => nameKey(user.username) === key);
-};
+const findByName = (username) =>
+  toAccount(
+    db.sql('SELECT * FROM users WHERE username_key = ? AND deleted_at IS NULL').get(nameKey(username || ''))
+  );
 
 const exists = (userid) => Boolean(findUser(userid));
 
@@ -203,12 +195,8 @@ function createUser({ username, password }) {
   if (findByName(name)) throw FAIL('这个用户名已经有人用了。');
 
   const userid = newUserid(name);
-  const record = {
-    userid,
-    username: name,
-    createdAt: Date.now(),
-    password: hashPassword(password),
-  };
+  const secret = hashPassword(password);
+  const record = { userid, username: name, createdAt: Date.now() };
 
   // assets first: seedAssetsInto creates the directory itself and only seeds one
   // that does not exist yet, so it has to run before ensureUserDirs makes it
@@ -216,9 +204,10 @@ function createUser({ username, password }) {
   ensureUserDirs(userid);
   seedSite(userid);
 
-  const index = readIndex();
-  index.users.push(record);
-  writeIndex(index);
+  db.sql(
+    `INSERT INTO users (userid, username, username_key, created_at, pw_salt, pw_hash)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(userid, name, nameKey(name), record.createdAt, secret.salt, secret.hash);
   console.log('[users] created %s (%s)', name, userid);
   return publicUser(record);
 }
@@ -230,10 +219,8 @@ function createUser({ username, password }) {
  * needs to put everything back.
  */
 function removeUser(userid) {
-  const index = readIndex();
-  const at = index.users.findIndex((entry) => entry.userid === userid);
-  if (at < 0) throw FAIL('没有这个用户。', 404);
-  const [record] = index.users.splice(at, 1);
+  const account = findUser(userid);
+  if (!account) throw FAIL('没有这个用户。', 404);
 
   let archive = '';
   const dir = userDir(userid);
@@ -245,20 +232,26 @@ function removeUser(userid) {
     console.log('[users] archived %s to %s', userid, archive);
   }
 
-  index.deleted.unshift({ ...record, deletedAt: Date.now(), archive });
-  writeIndex(index);
-  return { ...publicUser(record), archived: Boolean(archive) };
+  db.sql('UPDATE users SET deleted_at = ?, archive = ? WHERE userid = ? AND deleted_at IS NULL').run(
+    Date.now(),
+    archive || null,
+    userid
+  );
+  return { ...publicUser(account), archived: Boolean(archive) };
 }
 
 /** Tombstones, with whether their content is still sitting in the archive. */
 function listDeleted() {
-  return readIndex().deleted.map((entry) => ({
-    userid: entry.userid,
-    username: entry.username,
-    createdAt: entry.createdAt,
-    deletedAt: entry.deletedAt,
-    hasContent: Boolean(entry.archive) && fs.existsSync(entry.archive),
-  }));
+  return db
+    .sql('SELECT * FROM users WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC')
+    .all()
+    .map((row) => ({
+      userid: row.userid,
+      username: row.username,
+      createdAt: row.created_at,
+      deletedAt: row.deleted_at,
+      hasContent: Boolean(row.archive) && fs.existsSync(row.archive),
+    }));
 }
 
 /**
@@ -267,13 +260,11 @@ function listDeleted() {
  * still comes back and starts over from the example content.
  */
 function restoreUser(userid) {
-  const index = readIndex();
-  const at = index.deleted.findIndex((entry) => entry.userid === userid);
-  if (at < 0) throw FAIL('没有这个已删除的用户。', 404);
-  const tombstone = index.deleted[at];
-
-  if (index.users.some((entry) => entry.userid === userid)) throw FAIL('这个账号已经是启用状态。');
-  if (index.users.some((entry) => nameKey(entry.username) === nameKey(tombstone.username))) {
+  const tombstone = toAccount(
+    db.sql('SELECT * FROM users WHERE userid = ? AND deleted_at IS NOT NULL').get(userid)
+  );
+  if (!tombstone) throw FAIL('没有这个已删除的用户。', 404);
+  if (findByName(tombstone.username)) {
     throw FAIL(`「${tombstone.username}」这个名字现在被别人占用了，先处理重名再恢复。`);
   }
 
@@ -287,12 +278,9 @@ function restoreUser(userid) {
     seedSite(userid);
   }
 
-  const { deletedAt, archive, ...account } = tombstone;
-  index.users.push(account);
-  index.deleted.splice(at, 1);
-  writeIndex(index);
-  console.log('[users] restored %s (%s), content: %s', account.username, userid, contentRestored);
-  return { ...publicUser(account), contentRestored };
+  db.sql('UPDATE users SET deleted_at = NULL, archive = NULL WHERE userid = ?').run(userid);
+  console.log('[users] restored %s (%s), content: %s', tombstone.username, userid, contentRestored);
+  return { ...publicUser(tombstone), contentRestored };
 }
 
 /* ----------------------------------------------------------------- invites */
@@ -301,7 +289,7 @@ function restoreUser(userid) {
 const newInviteCode = () => crypto.randomBytes(16).toString('hex');
 
 function listInvites() {
-  return readInvites().sort((a, b) => b.createdAt - a.createdAt);
+  return db.sql('SELECT * FROM invites ORDER BY created_at DESC').all().map(toInvite);
 }
 
 function createInvite({ maxUses = DEFAULT_MAX_USES, note = '' } = {}) {
@@ -313,19 +301,21 @@ function createInvite({ maxUses = DEFAULT_MAX_USES, note = '' } = {}) {
     note: String(note || '').slice(0, 60),
     createdAt: Date.now(),
   };
-  const invites = readInvites();
-  invites.push(invite);
-  writeInvites(invites);
+  db.sql('INSERT INTO invites (code, max_uses, uses, note, created_at) VALUES (?, ?, ?, ?, ?)').run(
+    invite.code,
+    invite.maxUses,
+    invite.uses,
+    invite.note,
+    invite.createdAt
+  );
   console.log('[users] invite %s created (max %d)', invite.code.slice(0, 8), limit);
   return invite;
 }
 
 function removeInvite(code) {
   if (!INVITE_RE.test(String(code || ''))) throw FAIL('邀请码不合法。');
-  const invites = readInvites();
-  const next = invites.filter((invite) => invite.code !== code);
-  if (next.length === invites.length) throw FAIL('没有这个邀请码。', 404);
-  writeInvites(next);
+  const result = db.sql('DELETE FROM invites WHERE code = ?').run(String(code));
+  if (!result.changes) throw FAIL('没有这个邀请码。', 404);
   return { ok: true };
 }
 
@@ -333,21 +323,22 @@ function removeInvite(code) {
 function checkInvite(code) {
   const value = String(code || '').trim().toLowerCase();
   if (!INVITE_RE.test(value)) throw FAIL('邀请码不合法。');
-  const invite = readInvites().find((entry) => entry.code === value);
+  const invite = toInvite(db.sql('SELECT * FROM invites WHERE code = ?').get(value));
   if (!invite) throw FAIL('邀请码不对。');
   if (invite.uses >= invite.maxUses) throw FAIL('这个邀请码已经用完了。');
   return invite;
 }
 
-/** Spend one use of an invite. Called after the account was created. */
+/**
+ * Spend one use of an invite. Called after the account was created. The
+ * `uses < max_uses` in the WHERE clause is what makes it safe: two signups
+ * racing for the last use cannot both win it.
+ */
 function consumeInvite(code) {
-  checkInvite(code);
-  const value = String(code).trim().toLowerCase();
-  const invites = readInvites();
-  const invite = invites.find((entry) => entry.code === value);
-  invite.uses += 1;
-  writeInvites(invites);
-  return invite;
+  const value = String(code || '').trim().toLowerCase();
+  const result = db.sql('UPDATE invites SET uses = uses + 1 WHERE code = ? AND uses < max_uses').run(value);
+  if (!result.changes) throw FAIL('这个邀请码已经用完了。');
+  return toInvite(db.sql('SELECT * FROM invites WHERE code = ?').get(value));
 }
 
 module.exports = {

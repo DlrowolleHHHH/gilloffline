@@ -3,6 +3,7 @@ npm-debug.log*
 
 # runtime data — data/site.json is the committed example used to seed it
 data.local/
+users.local/
 data/uploads/
 data/.session-secret
 data/site.json.*.tmp
