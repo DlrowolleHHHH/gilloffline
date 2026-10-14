@@ -38,7 +38,7 @@ const SEED_ASSETS_DIR = path.join(ROOT, 'assets');
 
 /* ------------------------------------------------------------------ limits */
 
-const SIZES = ['1x1', '2x2', '1x2', '1x4', '2x4'];
+const SIZES = ['1x1', '2x2', '3x3', '4x4', '1x2', '1x4', '2x4', '3x6', '4x8'];
 const DIRECTIONS = ['left', 'right', 'top', 'bottom'];
 const RATIOS = ['1/1', '1/2'];
 const TYPES = ['image', 'solid', 'html'];

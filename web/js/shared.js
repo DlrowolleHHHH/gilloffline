@@ -2,15 +2,23 @@
  * Cell vocabulary + DOM builder shared by the showcase page and the editor.
  */
 
+/**
+ * Cell sizes. The key reads 行 × 列 — `1x2` is one row tall and two columns
+ * wide — which is how the labels and the README have always described them.
+ */
 export const SIZES = {
   '1x1': { w: 1, h: 1, label: '方形', note: '宽 1 × 高 1' },
   '2x2': { w: 2, h: 2, label: '大方形', note: '宽 2 × 高 2' },
+  '3x3': { w: 3, h: 3, label: '大方块', note: '宽 3 × 高 3' },
+  '4x4': { w: 4, h: 4, label: '巨方块', note: '宽 4 × 高 4' },
   '1x2': { w: 2, h: 1, label: '矩形', note: '宽 2 × 高 1' },
   '1x4': { w: 4, h: 1, label: '长矩形', note: '宽 4 × 高 1' },
   '2x4': { w: 4, h: 2, label: '大矩形', note: '宽 4 × 高 2' },
+  '3x6': { w: 6, h: 3, label: '宽横幅', note: '宽 6 × 高 3' },
+  '4x8': { w: 8, h: 4, label: '全宽横幅', note: '宽 8 × 高 4' },
 };
 
-export const SIZE_ORDER = ['1x1', '1x2', '1x4', '2x2', '2x4'];
+export const SIZE_ORDER = ['1x1', '1x2', '1x4', '2x2', '3x3', '4x4', '2x4', '3x6', '4x8'];
 
 /** `direction` is the side the detail panel slides in from. */
 export const DIRECTIONS = [

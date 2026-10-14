@@ -352,10 +352,11 @@ function buildSizeOptions() {
     button.dataset.size = key;
     button.setAttribute('aria-pressed', 'false');
 
+    // a dot per grid unit, drawn on the biggest board we support (8 × 4)
     const shape = document.createElement('span');
     shape.className = 'size-option__shape';
-    for (let row = 0; row < 2; row += 1) {
-      for (let col = 0; col < 4; col += 1) {
+    for (let row = 0; row < 4; row += 1) {
+      for (let col = 0; col < 8; col += 1) {
         const dot = document.createElement('span');
         if (col >= size.w || row >= size.h) dot.style.visibility = 'hidden';
         shape.append(dot);

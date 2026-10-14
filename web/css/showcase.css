@@ -17,16 +17,45 @@
   grid-auto-flow: row dense;
 }
 
-/* spans: 方形 1x1 / 大方形 2x2 / 矩形 1x2 / 长矩形 1x4 / 大矩形 2x4 */
+/* spans: 1x1 / 2x2 / 3x3 / 4x4 / 1x2 / 1x4 / 2x4 / 3x6 / 4x8 */
 .w1 { grid-column: span 1; }
 .w2 { grid-column: span 2; }
+.w3 { grid-column: span 3; }
 .w4 { grid-column: span 4; }
+.w6 { grid-column: span 6; }
+.w8 { grid-column: span 8; }
 .h1 { grid-row: span 1; }
 .h2 { grid-row: span 2; }
+.h3 { grid-row: span 3; }
+.h4 { grid-row: span 4; }
 
-/* below 4 columns, wide cells shrink so they can never overflow the grid */
+/*
+ * A wide cell has to shrink when the window cannot fit that many columns, or it
+ * would spill out of the grid. Only the column span drops, the row span stays —
+ * so the cell just gets closer to square, the same trade the 4-wide cells have
+ * always made. The breakpoints are where the grid actually loses a column
+ * (a column is --cell + --gap, the page is 100% - 48px): 8 columns need ~1380px,
+ * 6 need ~1040px, 4 need ~700px.
+ */
+@media (max-width: 1380px) {
+  .w8 { grid-column: span 6; }
+}
+
+@media (max-width: 1040px) {
+  .w6 { grid-column: span 4; }
+  .w8 { grid-column: span 4; }
+}
+
 @media (max-width: 700px) {
+  .w3 { grid-column: span 2; }
   .w4 { grid-column: span 2; }
+  .w6 { grid-column: span 3; }
+  .w8 { grid-column: span 3; }
+}
+
+@media (max-width: 480px) {
+  .w6 { grid-column: span 2; }
+  .w8 { grid-column: span 2; }
 }
 
 /* ------------------------------------------------------------------- cell */
@@ -152,13 +181,25 @@
 }
 
 .cell--w2 .cell__overlay-title,
+.cell--w3 .cell__overlay-title,
 .cell--w4 .cell__overlay-title {
   font-size: clamp(14px, 1.15vw, 19px);
 }
 
+.cell--w6 .cell__overlay-title,
+.cell--w8 .cell__overlay-title {
+  font-size: clamp(15px, 1.3vw, 24px);
+}
+
 .cell--w2 .cell__overlay-body,
+.cell--w3 .cell__overlay-body,
 .cell--w4 .cell__overlay-body {
   font-size: clamp(12.5px, 1vw, 14.5px);
+}
+
+.cell--w6 .cell__overlay-body,
+.cell--w8 .cell__overlay-body {
+  font-size: clamp(13px, 1.1vw, 16px);
 }
 
 /* 1/1 — the panel covers the whole cell and slides in from `direction` */

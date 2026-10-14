@@ -510,12 +510,13 @@
   color: var(--text);
 }
 
+/* one dot per grid unit, on a board big enough for the largest cell (8 × 4) */
 .size-option__shape {
   display: grid;
-  grid-template-columns: repeat(4, 5px);
-  grid-auto-rows: 5px;
-  gap: 2px;
-  height: 12px;
+  grid-template-columns: repeat(8, 3px);
+  grid-auto-rows: 3px;
+  gap: 1px;
+  height: 15px;
   align-content: center;
 }
 
