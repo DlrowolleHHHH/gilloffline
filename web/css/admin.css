@@ -231,26 +231,44 @@
  * The board is its own fixed-scale canvas: 1 unit = --cell-size (set by the JS
  * layout pass), the empty units drawn as a lattice so it is obvious what can be
  * aimed at. It scrolls sideways when the panel is too narrow for all columns.
+ *
+ * The lattice is a pseudo-element rather than the element's own background: it
+ * has to cover exactly the tracks. Zoomed out, the tracks sit in the middle of
+ * the panel and the sides are left empty — a background would tile all the way
+ * across and there would be no telling where the board ends.
  */
 .admin-board {
-  /* a fallback only: the JS sets --gap from the site's spacing × the zoom, so
-     what you aim at is spaced like the real page */
+  /* fallbacks only: the JS sets --gap and --cell-size from the site and the zoom */
   --gap: 6px;
+  --rows: 6;
+  --board-w: 100%;
+  --board-x: 0px;
+  --board-h: calc(var(--rows) * var(--cell-size, 48px) + (var(--rows) - 1) * var(--gap, 6px));
   position: relative;
-  justify-content: start;
+  /* `safe` keeps a board that is wider than the panel scrollable: plain center
+     would push the left columns out of reach */
+  justify-content: safe center;
+  min-height: var(--board-h);
   padding: 6px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   border: 1px solid var(--line);
   border-radius: 14px;
   background-color: color-mix(in srgb, var(--ink-900) 55%, transparent);
+}
+
+/* scrolls with the tracks, unlike a background the element would keep in place */
+.admin-board::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--board-x);
+  width: var(--board-w);
+  height: var(--board-h);
+  pointer-events: none;
   background-image: linear-gradient(to right, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px),
     linear-gradient(to bottom, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px);
   background-size: calc(var(--cell-size, 48px) + var(--gap)) calc(var(--cell-size, 48px) + var(--gap));
-  background-origin: content-box;
-  /* `local` keeps the lattice glued to the tracks: without it the background
-     stays put while the cells scroll, and nothing lines up any more */
-  background-attachment: local;
 }
 
 .admin-board.is-dragging {

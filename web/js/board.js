@@ -289,13 +289,14 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   /**
    * The board is as tall as its content plus two empty rows to draw into —
    * every caller asks for `farthest + 2`. There is no row ceiling: drag a cell
-   * down and the canvas follows.
+   * down and the canvas follows. The height itself is CSS (`--board-h`), since
+   * the lattice has to be exactly as tall as the tracks.
    */
   function growRows(wanted) {
     const next = Math.max(2, wanted);
     if (next === currentRows) return;
     currentRows = next;
-    root.style.minHeight = `calc(${next} * var(--cell-size, 48px) + ${next - 1} * var(--gap, 6px))`;
+    root.style.setProperty('--rows', String(next));
   }
 
   function render(nextCells, options = {}) {

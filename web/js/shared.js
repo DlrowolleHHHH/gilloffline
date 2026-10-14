@@ -345,23 +345,34 @@ export function applyGridLayout(
 
   if (layout === 'board') {
     const cols = Math.max(1, Math.min(MAX_COLS, Math.round(columns) || MAX_COLS));
-    // `scale` is the editor's zoom: below 1 more of the board fits into the
-    // panel, above 1 it overflows and scrolls. It multiplies the gap as well as
-    // the cell, so the whole board scales as one picture — the fit itself is
-    // measured at the site's real spacing, which keeps 50% exactly half.
+    // `scale` is the editor's zoom, always ≤ 1: more of the board fits into the
+    // panel at once. It multiplies the gap as well as the cell, so the whole
+    // board scales as one picture — the fit itself is measured at the site's
+    // real spacing, which keeps 50% exactly half.
     const zoomGap = gap * scale;
     const size = Math.max(minCell, (width - (cols - 1) * gap) / cols) * scale;
+    const padX = Number.parseFloat(style.paddingLeft) || 0;
+    const padY = Number.parseFloat(style.paddingTop) || 0;
+    const padRight = Number.parseFloat(style.paddingRight) || 0;
+
+    // The lattice and the pointer maths both need to know where the tracks are.
+    // The tracks are centred (see .admin-board), which at 100% means nothing and
+    // at 15% means the whole board sits in the middle of an empty panel.
+    const tracks = cols * size + (cols - 1) * zoomGap;
+    const free = grid.clientWidth - padX - padRight - tracks;
+    const centered = Math.max(0, free / 2);
+
     grid.classList.add('is-fixed');
     grid.style.setProperty('--gap', `${zoomGap.toFixed(2)}px`);
     grid.style.setProperty('--cols', String(cols));
     grid.style.setProperty('--cell-size', `${size.toFixed(2)}px`);
+    grid.style.setProperty('--board-x', `${(padX + centered).toFixed(2)}px`);
+    grid.style.setProperty('--board-w', `${tracks.toFixed(2)}px`);
     grid.dataset.cols = String(cols);
     grid.dataset.pitch = (size + zoomGap).toFixed(2); // the editor measures pointers with this
-    // where the tracks actually start: the board has a border and padding, and a
-    // pointer has to be measured from the content box, not the border box
-    const padX = grid.clientLeft + (Number.parseFloat(style.paddingLeft) || 0);
-    const padY = grid.clientTop + (Number.parseFloat(style.paddingTop) || 0);
-    grid.dataset.inset = `${padX.toFixed(2)},${padY.toFixed(2)}`;
+    // where the tracks actually start, measured from the border box the pointer
+    // arrives in — border, padding and centring included
+    grid.dataset.inset = `${(grid.clientLeft + padX + centered).toFixed(2)},${(grid.clientTop + padY).toFixed(2)}`;
 
     const byId = new Map(cells.map((cell) => [cell.id, cell]));
     for (const item of items) {
