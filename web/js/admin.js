@@ -893,12 +893,57 @@ function userRow(user) {
   return row;
 }
 
+function deletedRow(tombstone) {
+  const row = document.createElement('li');
+  row.className = 'file-row';
+
+  const thumb = document.createElement('span');
+  thumb.className = 'file-row__thumb file-row__thumb--text';
+  thumb.textContent = [...tombstone.username][0] || '?';
+
+  const name = document.createElement('span');
+  name.className = 'file-row__name';
+  name.textContent = tombstone.username;
+
+  const meta = document.createElement('span');
+  meta.className = 'file-row__meta';
+  meta.textContent = `删除于 ${stampOf(tombstone.deletedAt)}`;
+
+  const badge = document.createElement('span');
+  badge.className = 'file-row__badge';
+  badge.textContent = tombstone.hasContent ? '内容还在归档里' : '归档已清理';
+  badge.hidden = false;
+
+  const actions = document.createElement('span');
+  actions.className = 'file-row__acts';
+  const restore = actionButton('restore', '↺', '恢复这个用户', tombstone.userid);
+  restore.dataset.username = tombstone.username;
+  actions.append(restore);
+
+  row.append(thumb, name, meta, badge, actions);
+  return row;
+}
+
+function renderDeleted(people) {
+  const list = $('deleted-list');
+  list.replaceChildren();
+  if (!people.length) {
+    const empty = document.createElement('li');
+    empty.className = 'file-empty';
+    empty.textContent = '没有删除过的用户。';
+    list.append(empty);
+    return;
+  }
+  for (const person of people) list.append(deletedRow(person));
+}
+
 async function loadPeople() {
   if (!isOwnerPage) return;
   try {
     const [invites, people] = await Promise.all([api('/api/invites'), api('/api/users')]);
     renderInvites(invites.invites || []);
     renderUsers(people.users || []);
+    renderDeleted(people.deleted || []);
   } catch (err) {
     if (err.status === 401 || err.status === 403) return; // not logged in as the owner
     toast(err.message, 'error');
@@ -980,6 +1025,20 @@ async function removeUser(userid2, username) {
   }
 }
 
+async function restoreUser(userid2, username) {
+  if (!confirm(`恢复用户「${username}」？账号（连同原密码）和归档的内容都会回来。`)) return;
+  try {
+    const restored = await api('/api/users/restore', { method: 'POST', body: { userid: userid2 } });
+    await loadPeople();
+    toast(
+      restored.contentRestored ? `已恢复 ${username}（内容原样回来了）` : `已恢复 ${username}（归档没了，用新的默认内容）`,
+      'ok'
+    );
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
 async function removeInvite(code) {
   if (!confirm('删除这个邀请码？已经用它注册的人不受影响。')) return;
   try {
@@ -1011,6 +1070,12 @@ function bindPeople() {
       toast('邀请码已复制', 'ok');
     }
     if (button.dataset.act === 'del') removeInvite(button.dataset.name);
+  });
+
+  $('deleted-list').addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-act="restore"]');
+    if (!button) return;
+    restoreUser(button.dataset.name, button.dataset.username || button.dataset.name);
   });
 
   $('user-list').addEventListener('click', (event) => {

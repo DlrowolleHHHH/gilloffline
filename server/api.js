@@ -328,9 +328,17 @@ async function handle(req, res, url) {
     return sendJson(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie() });
   }
 
+  if (pathname === '/api/users/restore' && method === 'POST') {
+    if (!requireOwner(req, res)) return undefined;
+    const body = await readJson(req);
+    return sendJson(res, 200, users.restoreUser(body.userid));
+  }
+
   if (pathname === '/api/users') {
     if (!requireOwner(req, res)) return undefined;
-    if (method === 'GET') return sendJson(res, 200, { users: users.listUsers() });
+    if (method === 'GET') {
+      return sendJson(res, 200, { users: users.listUsers(), deleted: users.listDeleted() });
+    }
     if (method === 'POST') {
       const body = await readJson(req);
       return sendJson(res, 201, users.createUser({ username: body.username, password: body.password }));

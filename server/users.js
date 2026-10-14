@@ -84,12 +84,24 @@ function readJson(file, fallback) {
   }
 }
 
-const readUsers = () => {
-  const data = readJson(INDEX_FILE, { users: [] });
-  return Array.isArray(data.users) ? data.users.filter((user) => isUserid(user.userid)) : [];
-};
+/**
+ * The account index: `users` are the live accounts, `deleted` are tombstones.
+ * A tombstone keeps the whole record — password hash included — plus where the
+ * content was archived, which is what makes a delete undoable.
+ */
+function readIndex() {
+  const data = readJson(INDEX_FILE, {});
+  const keep = (entry) => entry && isUserid(entry.userid);
+  return {
+    users: Array.isArray(data.users) ? data.users.filter(keep) : [],
+    deleted: Array.isArray(data.deleted) ? data.deleted.filter(keep) : [],
+  };
+}
 
-const writeUsers = (users) => store.writeJsonAtomic(INDEX_FILE, { version: 1, users });
+const writeIndex = (index) =>
+  store.writeJsonAtomic(INDEX_FILE, { version: 1, users: index.users, deleted: index.deleted });
+
+const readUsers = () => readIndex().users;
 
 const readInvites = () => {
   const data = readJson(INVITES_FILE, { invites: [] });
@@ -204,33 +216,83 @@ function createUser({ username, password }) {
   ensureUserDirs(userid);
   seedSite(userid);
 
-  const users = readUsers();
-  users.push(record);
-  writeUsers(users);
+  const index = readIndex();
+  index.users.push(record);
+  writeIndex(index);
   console.log('[users] created %s (%s)', name, userid);
   return publicUser(record);
 }
 
 /**
- * Remove a user: the login record goes, the directory is moved into
- * USERS_DIR/.deleted/<userid>-<stamp>/ (a rename, so it is instant and can be
- * undone by hand).
+ * Remove a user: the directory is moved into USERS_DIR/.deleted/<userid>-<stamp>/
+ * (a rename, so it is instant) and the account becomes a tombstone that
+ * remembers the password hash and the archive — which is what `restoreUser`
+ * needs to put everything back.
  */
 function removeUser(userid) {
-  const user = findUser(userid);
-  if (!user) throw FAIL('没有这个用户。', 404);
+  const index = readIndex();
+  const at = index.users.findIndex((entry) => entry.userid === userid);
+  if (at < 0) throw FAIL('没有这个用户。', 404);
+  const [record] = index.users.splice(at, 1);
 
+  let archive = '';
   const dir = userDir(userid);
   if (fs.existsSync(dir)) {
     fs.mkdirSync(ARCHIVE_DIR, { recursive: true });
     const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-    const target = path.join(ARCHIVE_DIR, `${userid}-${stamp}`);
-    fs.renameSync(dir, target);
-    console.log('[users] archived %s to %s', userid, target);
+    archive = path.join(ARCHIVE_DIR, `${userid}-${stamp}`);
+    fs.renameSync(dir, archive);
+    console.log('[users] archived %s to %s', userid, archive);
   }
 
-  writeUsers(readUsers().filter((entry) => entry.userid !== userid));
-  return { ...publicUser(user), archivedAt: path.join(ARCHIVE_DIR, `${userid}-*`) };
+  index.deleted.unshift({ ...record, deletedAt: Date.now(), archive });
+  writeIndex(index);
+  return { ...publicUser(record), archived: Boolean(archive) };
+}
+
+/** Tombstones, with whether their content is still sitting in the archive. */
+function listDeleted() {
+  return readIndex().deleted.map((entry) => ({
+    userid: entry.userid,
+    username: entry.username,
+    createdAt: entry.createdAt,
+    deletedAt: entry.deletedAt,
+    hasContent: Boolean(entry.archive) && fs.existsSync(entry.archive),
+  }));
+}
+
+/**
+ * Undo a delete: move the archived directory back and the account out of the
+ * tombstones. If the archive is gone (someone cleaned .deleted/), the account
+ * still comes back and starts over from the example content.
+ */
+function restoreUser(userid) {
+  const index = readIndex();
+  const at = index.deleted.findIndex((entry) => entry.userid === userid);
+  if (at < 0) throw FAIL('没有这个已删除的用户。', 404);
+  const tombstone = index.deleted[at];
+
+  if (index.users.some((entry) => entry.userid === userid)) throw FAIL('这个账号已经是启用状态。');
+  if (index.users.some((entry) => nameKey(entry.username) === nameKey(tombstone.username))) {
+    throw FAIL(`「${tombstone.username}」这个名字现在被别人占用了，先处理重名再恢复。`);
+  }
+
+  let contentRestored = false;
+  if (tombstone.archive && fs.existsSync(tombstone.archive)) {
+    fs.renameSync(tombstone.archive, userDir(userid));
+    contentRestored = true;
+  } else {
+    store.seedAssetsInto(kindDir(userid, 'assets'));
+    ensureUserDirs(userid);
+    seedSite(userid);
+  }
+
+  const { deletedAt, archive, ...account } = tombstone;
+  index.users.push(account);
+  index.deleted.splice(at, 1);
+  writeIndex(index);
+  console.log('[users] restored %s (%s), content: %s', account.username, userid, contentRestored);
+  return { ...publicUser(account), contentRestored };
 }
 
 /* ----------------------------------------------------------------- invites */
@@ -307,6 +369,8 @@ module.exports = {
   exists,
   createUser,
   removeUser,
+  listDeleted,
+  restoreUser,
   passwordMatches,
   listInvites,
   createInvite,

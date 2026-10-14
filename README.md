@@ -165,7 +165,10 @@
   用完的码会标「已用完」，删掉不影响已注册的人。
 - **用户**：列表显示用户名、注册时间、userid 前几位。每行三个按钮：
   `↗` 看他/她的主页、`✎` 代管（进他的 `/admin?userid=…`，用站主身份就能编辑）、
-  `✕` 删除（**先把目录归档**到 `/app/users/.deleted/<userid>-<时间>/`，再删账号，误删可以捞回来）。
+  `✕` 删除（内容归档到 `/app/users/.deleted/<userid>-<时间>/`，账号变成墓碑）。
+- **已删除**：面板底下单列一块，显示删掉的账号和「内容还在归档里 / 归档已清理」。点 `↺` 恢复——
+  **账号、原密码和内容一起回来**；归档被清过的话，账号照样回来，内容从默认内容重新开始；
+  这个名字被别人占了会提示先处理重名。
 - 也可以**直接添加用户**（用户名 + 初始密码），不需要邀请码。
 
 用户的密码用 `scrypt` 加随机盐存在 `/app/data/users.json`（邀请码在 `/app/data/invites.json`）；
@@ -385,7 +388,7 @@ ADMIN_PASSWORD='你的密码' SERVER_NAME=example.com HOST_SSL_DIR=/etc/letsencr
 /app/data/assets/          # 站主自己的图片（logo.svg / title.png），首启从仓库播种
 /app/data/uploads/         # 站主上传的图片
 /app/data/pages/           # 站主上传的 HTML 页面（及其 css / js / 图片）
-/app/data/users.json       # 用户账号（用户名、userid、scrypt 密码哈希）
+/app/data/users.json       # 用户账号（用户名、userid、scrypt 密码哈希；含已删除的墓碑记录）
 /app/data/invites.json     # 邀请码和它们的次数
 
 /app/users/<userid>/       # 每个子管理员的小站：site.json + assets/ + uploads/ + pages/
@@ -421,7 +424,8 @@ cp -a /app/users /root/users-backup-$(date +%F)
 | `GET` | `/api/health` | 公开 | 健康检查 |
 | `POST` | `/api/login` | 公开 | 站主传 `{password}`，用户传 `{username, password}`，下发会话 cookie |
 | `POST` | `/api/register` | 公开 | `{username, password, invite}` 注册并登录 |
-| `GET` `POST` `DELETE` | `/api/users` | 站主 | 列出 / 直接添加 / 删除用户 |
+| `GET` `POST` `DELETE` | `/api/users` | 站主 | 列出（含已删除）/ 直接添加 / 删除用户 |
+| `POST` | `/api/users/restore` | 站主 | 恢复一个已删除的用户（`{ userid }`）|
 | `GET` `POST` `DELETE` | `/api/invites` | 站主 | 列出 / 生成 / 删除邀请码 |
 | `POST` | `/api/logout` | 公开 | 清除 cookie |
 | `PUT` | `/api/site` | 需登录 | 覆盖保存整份配置（自己的站，或站主代管） |
