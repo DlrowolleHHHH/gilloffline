@@ -98,6 +98,19 @@
           </div>
         </details>
 
+        <details class="panel" id="files-panel">
+          <summary>文件</summary>
+          <div class="files">
+            <div class="file-tabs" id="file-tabs"></div>
+            <div class="file-bar">
+              <button class="btn" id="file-upload" type="button">上传到这里</button>
+              <span class="hint" id="file-hint"></span>
+              <input type="file" id="file-input" hidden />
+            </div>
+            <ul class="file-list" id="file-list"></ul>
+          </div>
+        </details>
+
         <div class="admin-toolbar">
           <strong id="cell-count"></strong>
           <span class="hint">拖动格子左上角的 ⠿ 可排序，悬浮格子后可编辑 / 复制 / 删除</span>
@@ -127,6 +140,7 @@
             <label for="ed-type">格子类型</label>
             <select class="input" id="ed-type">
               <option value="image">有内容格子（展示图片）</option>
+              <option value="html">HTML 页面格子（嵌入网页）</option>
               <option value="solid">纯色格子</option>
             </select>
           </div>
@@ -175,8 +189,30 @@
               <option value="contain">完整显示（contain）</option>
             </select>
           </div>
+        </fieldset>
+
+        <fieldset class="fieldset" id="fs-html">
+          <legend>HTML 页面</legend>
           <div class="field">
-            <label for="ed-image-title">图片角标文字（常显，可留空）</label>
+            <label for="ed-html">页面地址</label>
+            <input class="input" id="ed-html" type="text" spellcheck="false" placeholder="/pages/xxx.html 或 https://…" />
+          </div>
+          <div class="upload-picker">
+            <button class="btn" id="btn-upload-html" type="button">上传 HTML 文件</button>
+            <button class="btn btn--ghost" id="btn-open-html" type="button">新标签页打开</button>
+            <input type="file" id="upload-file-html" accept=".html,.htm,text/html" hidden />
+          </div>
+          <p class="hint">
+            上传的页面存在数据目录里，重新部署不会丢。页面在沙箱里运行：可以用 JavaScript，
+            但读不到本站的登录状态、调不了本站接口，也影响不到外层页面。
+            页面里的交互（按钮、滚动）要能点到，建议把下面的「悬浮详情」关掉——详情面板一滑进来就盖住页面了。
+          </p>
+        </fieldset>
+
+        <fieldset class="fieldset" id="fs-caption">
+          <legend>角标文字</legend>
+          <div class="field">
+            <label for="ed-image-title">角标文字（常显在底部，可留空）</label>
             <input class="input" id="ed-image-title" type="text" />
           </div>
           <div class="field">

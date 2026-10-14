@@ -56,11 +56,19 @@ export function defaultCell(overrides = {}) {
     imageTitle: '',
     imageTitleColor: '#ffffff',
     color: '#7e46b9',
+    html: '',
     link: '',
     overlay: defaultOverlay(),
     ...overrides,
   };
 }
+
+/**
+ * Permissions handed to an embedded page. Scripts are allowed, but omitting
+ * `allow-same-origin` leaves the frame on an opaque origin: it cannot read the
+ * site's cookies or call its API, and it cannot reach the page around it.
+ */
+const FRAME_SANDBOX = 'allow-scripts allow-forms allow-popups allow-modals allow-downloads';
 
 export function cellClasses(cell) {
   const size = SIZES[cell.size] || SIZES['1x1'];
@@ -106,13 +114,36 @@ export function createCell(cell) {
       media.append(img);
     }
     node.append(media);
+  }
 
-    if (cell.imageTitle) {
-      const caption = document.createElement('span');
-      caption.className = 'cell__caption';
-      caption.textContent = cell.imageTitle;
-      node.append(caption);
+  if (cell.type === 'html') {
+    const media = document.createElement('div');
+    media.className = 'cell__media';
+    if (cell.html) {
+      const frame = document.createElement('iframe');
+      frame.className = 'cell__frame';
+      frame.src = cell.html;
+      frame.loading = 'lazy';
+      frame.title = cell.imageTitle || '嵌入的页面';
+      frame.referrerPolicy = 'no-referrer';
+      frame.setAttribute('sandbox', FRAME_SANDBOX);
+      media.append(frame);
+    } else {
+      media.classList.add('cell__media--empty');
+      const hint = document.createElement('span');
+      hint.className = 'cell__hint';
+      hint.textContent = '尚未嵌入页面';
+      media.append(hint);
     }
+    node.append(media);
+  }
+
+  // the caption under an image or an embedded page is the same always-on badge
+  if ((cell.type === 'image' || cell.type === 'html') && cell.imageTitle) {
+    const caption = document.createElement('span');
+    caption.className = 'cell__caption';
+    caption.textContent = cell.imageTitle;
+    node.append(caption);
   }
 
   const overlay = cell.overlay || {};

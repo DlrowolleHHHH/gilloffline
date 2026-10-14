@@ -4,7 +4,7 @@
 # certificate filenames can come from the environment.
 set -e
 
-DATA_DIR="${DATA_DIR:-/data}"
+DATA_DIR="${DATA_DIR:-/app/data}"
 SSL_DIR="${SSL_DIR:-/app/ssl}"
 SERVER_NAME="${SERVER_NAME:-_}"
 SSL_CERT_FILE="${SSL_CERT_FILE:-gilloffline.online.pem}"

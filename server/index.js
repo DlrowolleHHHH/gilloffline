@@ -19,8 +19,17 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
 const WEB_DIR = path.resolve(process.env.WEB_DIR || path.join(store.ROOT, 'web'));
 
-/** Served from web/assets when present, otherwise straight from the repo root. */
-const ROOT_ASSETS = new Set(['logo.svg', 'title.png']);
+/**
+ * Everything under these prefixes is served straight out of the data directory:
+ * the site's own images, uploaded images, and embedded HTML pages. All of it can
+ * be replaced from the admin page at any time, so responses are revalidated
+ * (ETag) instead of being cached blindly.
+ */
+const DATA_MOUNTS = [
+  ['/assets/', () => store.ASSETS_DIR],
+  ['/uploads/', () => store.UPLOAD_DIR],
+  ['/pages/', () => store.PAGES_DIR],
+];
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -74,32 +83,27 @@ function sendFile(res, file, { cache = 'no-cache', download = false } = {}) {
 
 /** Resolve a URL path inside `base`, refusing anything that escapes it. */
 function resolveInside(base, urlPath) {
-  const decoded = decodeURIComponent(urlPath);
+  let decoded;
+  try {
+    decoded = decodeURIComponent(urlPath);
+  } catch {
+    return null; // malformed percent-escape: nothing to serve
+  }
   const full = path.resolve(base, '.' + path.posix.normalize(decoded));
   return full === base || full.startsWith(base + path.sep) ? full : null;
 }
 
-function serveUpload(req, res, pathname) {
-  const target = resolveInside(store.UPLOAD_DIR, pathname.slice('/uploads'.length));
-  if (!target || !fs.existsSync(target)) {
-    return send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });
-  }
-  // content is immutable: uploads get a fresh name, never overwritten in place
-  return sendFile(res, target, { cache: 'public, max-age=31536000, immutable' });
+/** Serve one URL path out of `base`; 404 when it is missing or tries to escape. */
+function serveFrom(res, base, urlPath, cache) {
+  const target = resolveInside(base, urlPath);
+  if (target && sendFile(res, target, { cache })) return undefined;
+  return send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });
 }
 
-function serveStatic(req, res, pathname) {
+function serveStatic(res, pathname) {
   let rel = pathname === '/' ? '/index.html' : pathname;
   if (rel.endsWith('/')) rel += 'index.html';
   if (rel === '/admin') rel = '/admin.html';
-
-  if (rel.startsWith('/assets/') && ROOT_ASSETS.has(rel.slice('/assets/'.length))) {
-    const name = rel.slice('/assets/'.length);
-    const inWeb = path.join(WEB_DIR, 'assets', name);
-    if (fs.existsSync(inWeb)) return sendFile(res, inWeb, { cache: 'public, max-age=3600' });
-    const inRoot = path.join(store.ROOT, name);
-    if (fs.existsSync(inRoot)) return sendFile(res, inRoot, { cache: 'public, max-age=3600' });
-  }
 
   const target = resolveInside(WEB_DIR, rel);
   if (target && sendFile(res, target, { cache: 'no-cache' })) return undefined;
@@ -122,8 +126,12 @@ const server = http.createServer((req, res) => {
         const url = new URL(req.url, 'http://localhost');
         return api.handle(req, res, url);
       }
-      if (pathname.startsWith('/uploads/')) return serveUpload(req, res, pathname);
-      return serveStatic(req, res, pathname);
+      for (const [prefix, dir] of DATA_MOUNTS) {
+        if (pathname.startsWith(prefix)) {
+          return serveFrom(res, dir(), pathname.slice(prefix.length - 1), 'no-cache');
+        }
+      }
+      return serveStatic(res, pathname);
     })
     .catch((err) => {
       const status = err && err.status ? err.status : 500;

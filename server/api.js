@@ -9,9 +9,12 @@
  *   POST   /api/login             { password } -> session cookie
  *   POST   /api/logout            clears the cookie
  *   PUT    /api/site              replace the whole document (auth)
- *   GET    /api/uploads           list uploaded files (auth)
- *   POST   /api/uploads?name=x    raw binary upload (auth)
- *   DELETE /api/uploads?name=x    delete an upload (auth)
+ *   GET    /api/files?kind=x      list a file collection (auth)
+ *   POST   /api/files?kind=x&name=y   raw binary upload (auth)
+ *   DELETE /api/files?kind=x&name=y   delete a file (auth)
+ *
+ * `kind` is one of `assets` (the site's own images), `uploads` (images used in
+ * cells) or `pages` (HTML pages embedded in cells).
  */
 
 const fs = require('fs');
@@ -21,13 +24,50 @@ const store = require('./store');
 const auth = require('./auth');
 
 const MAX_BODY_BYTES = 24 * 1024 * 1024;
-const ALLOWED_UPLOAD_TYPES = {
+
+const IMAGE_TYPES = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
   'image/gif': '.gif',
   'image/webp': '.webp',
   'image/avif': '.avif',
   'image/svg+xml': '.svg',
+  'image/x-icon': '.ico',
+  'image/vnd.microsoft.icon': '.ico',
+};
+
+/**
+ * The file collections the admin page can browse and manage. Every one of them
+ * lives in the data directory (so it survives a redeploy) and is served
+ * read-only to visitors under `prefix`.
+ */
+const FILE_KINDS = {
+  assets: {
+    dir: () => store.ASSETS_DIR,
+    prefix: '/assets/',
+    types: IMAGE_TYPES,
+    label: 'PNG / JPEG / GIF / WebP / AVIF / SVG / ICO 图片',
+  },
+  uploads: {
+    dir: () => store.UPLOAD_DIR,
+    prefix: '/uploads/',
+    types: IMAGE_TYPES,
+    label: 'PNG / JPEG / GIF / WebP / AVIF / SVG / ICO 图片',
+  },
+  // an embedded page may bring its own css / js / images along
+  pages: {
+    dir: () => store.PAGES_DIR,
+    prefix: '/pages/',
+    types: {
+      'text/html': '.html',
+      'text/css': '.css',
+      'text/javascript': '.js',
+      'application/javascript': '.js',
+      'application/json': '.json',
+      ...IMAGE_TYPES,
+    },
+    label: 'HTML / CSS / JS / JSON 或图片',
+  },
 };
 
 /* ----------------------------------------------------------------- helpers */
@@ -98,12 +138,63 @@ function sanitizeFilename(name) {
   return base.replace(/^\.+/, '').slice(0, 96);
 }
 
-function uploadPath(name) {
+/** Absolute path of `name` inside the kind's directory, or null if it is unsafe. */
+function filePath(kind, name) {
   const safe = sanitizeFilename(name);
   if (!safe) return null;
-  const full = path.join(store.UPLOAD_DIR, safe);
-  if (!full.startsWith(store.UPLOAD_DIR + path.sep)) return null;
+  const base = kind.dir();
+  const full = path.join(base, safe);
+  if (!full.startsWith(base + path.sep)) return null;
   return full;
+}
+
+function listFiles(kind, res) {
+  let names = [];
+  try {
+    names = fs.readdirSync(kind.dir());
+  } catch {
+    names = [];
+  }
+  const files = names
+    .filter((name) => !name.startsWith('.'))
+    .map((name) => {
+      const stat = fs.statSync(path.join(kind.dir(), name));
+      return { name, url: kind.prefix + name, size: stat.size, mtime: stat.mtimeMs };
+    })
+    .sort((a, b) => b.mtime - a.mtime);
+  return sendJson(res, 200, { files });
+}
+
+/** Raw binary upload; overwriting an existing name is how a page gets updated. */
+async function uploadFile(kind, req, res, url) {
+  const ext = kind.types[String(req.headers['content-type'] || '').split(';')[0].trim()];
+  if (!ext) return sendJson(res, 415, { error: `只支持 ${kind.label}。` });
+
+  const buf = await readBody(req);
+  if (!buf.length) return sendJson(res, 400, { error: '空文件。' });
+  if (buf.length > store.MAX_UPLOAD_BYTES) return sendJson(res, 413, { error: '文件超过 8 MB。' });
+
+  const requested = url.searchParams.get('name') || '';
+  let target = filePath(kind, requested);
+  if (!target) target = path.join(kind.dir(), store.newId() + ext);
+  if (path.extname(target).toLowerCase() !== ext) target = target.replace(/\.[^.]*$/, '') + ext;
+
+  fs.mkdirSync(kind.dir(), { recursive: true });
+  fs.writeFileSync(target, buf);
+  const name = path.basename(target);
+  console.log('[api] upload %s (%d bytes)', name, buf.length);
+  return sendJson(res, 201, { url: kind.prefix + name, name, size: buf.length });
+}
+
+function deleteFile(kind, res, url) {
+  const target = filePath(kind, url.searchParams.get('name'));
+  if (!target) return sendJson(res, 400, { error: '文件名不合法。' });
+  try {
+    fs.unlinkSync(target);
+  } catch {
+    return sendJson(res, 404, { error: '文件不存在。' });
+  }
+  return sendJson(res, 200, { ok: true });
 }
 
 /* ------------------------------------------------------------------ router */
@@ -163,55 +254,13 @@ async function handle(req, res, url) {
     return sendJson(res, 200, saved);
   }
 
-  if (pathname === '/api/uploads' && method === 'GET') {
+  if (pathname === '/api/files') {
     if (!requireAuth(req, res)) return undefined;
-    let names = [];
-    try {
-      names = fs.readdirSync(store.UPLOAD_DIR);
-    } catch {
-      names = [];
-    }
-    const files = names
-      .filter((name) => !name.startsWith('.'))
-      .map((name) => {
-        const stat = fs.statSync(path.join(store.UPLOAD_DIR, name));
-        return { name, url: `/uploads/${name}`, size: stat.size, mtime: stat.mtimeMs };
-      })
-      .sort((a, b) => b.mtime - a.mtime);
-    return sendJson(res, 200, { files });
-  }
-
-  if (pathname === '/api/uploads' && method === 'POST') {
-    if (!requireAuth(req, res)) return undefined;
-    const ext = ALLOWED_UPLOAD_TYPES[String(req.headers['content-type'] || '').split(';')[0].trim()];
-    if (!ext) return sendJson(res, 415, { error: '只支持 PNG / JPEG / GIF / WebP / AVIF / SVG 图片。' });
-
-    const buf = await readBody(req);
-    if (!buf.length) return sendJson(res, 400, { error: '空文件。' });
-    if (buf.length > store.MAX_UPLOAD_BYTES) return sendJson(res, 413, { error: '图片超过 8 MB。' });
-
-    const requested = url.searchParams.get('name') || '';
-    let target = uploadPath(requested);
-    if (!target) target = path.join(store.UPLOAD_DIR, store.newId() + ext);
-    if (path.extname(target).toLowerCase() !== ext) target = target.replace(/\.[^.]*$/, '') + ext;
-
-    fs.mkdirSync(store.UPLOAD_DIR, { recursive: true });
-    fs.writeFileSync(target, buf);
-    const name = path.basename(target);
-    console.log('[api] upload %s (%d bytes)', name, buf.length);
-    return sendJson(res, 201, { url: `/uploads/${name}`, name, size: buf.length });
-  }
-
-  if (pathname === '/api/uploads' && method === 'DELETE') {
-    if (!requireAuth(req, res)) return undefined;
-    const target = uploadPath(url.searchParams.get('name'));
-    if (!target) return sendJson(res, 400, { error: '文件名不合法。' });
-    try {
-      fs.unlinkSync(target);
-    } catch {
-      return sendJson(res, 404, { error: '文件不存在。' });
-    }
-    return sendJson(res, 200, { ok: true });
+    const kind = FILE_KINDS[url.searchParams.get('kind')];
+    if (!kind) return sendJson(res, 400, { error: '未知的文件类别。' });
+    if (method === 'GET') return listFiles(kind, res);
+    if (method === 'POST') return uploadFile(kind, req, res, url);
+    if (method === 'DELETE') return deleteFile(kind, res, url);
   }
 
   return sendJson(res, 404, { error: '未知接口。' });

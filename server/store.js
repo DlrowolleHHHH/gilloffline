@@ -9,6 +9,12 @@
  *
  * `data/site.json` is the committed example and is read-only at runtime: it
  * seeds an empty data directory, so running the app can never dirty the tree.
+ *
+ * Everything the site serves at runtime lives in DATA_DIR (the mounted volume):
+ *   site.json    the content above, plus .session-secret from auth.js
+ *   assets/      the site's own images, seeded from the checkout once
+ *   uploads/     images uploaded from the admin page
+ *   pages/       HTML pages embedded in showcase cells
  */
 
 const fs = require('fs');
@@ -21,14 +27,21 @@ const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data.local');
 /** The committed example, copied into DATA_DIR the first time it is empty. */
 const SEED_DIR = process.env.SEED_DIR || path.join(ROOT, 'data');
 const SITE_FILE = path.join(DATA_DIR, 'site.json');
+/** Uploaded images. */
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+/** Uploaded HTML pages (plus any css/js/images they bring along). */
+const PAGES_DIR = path.join(DATA_DIR, 'pages');
+/** The site's own images (logo.svg / title.png), seeded from the checkout. */
+const ASSETS_DIR = path.join(DATA_DIR, 'assets');
+/** Where those images ship: the repo's assets/, or /app/assets in Docker. */
+const SEED_ASSETS_DIR = path.join(ROOT, 'assets');
 
 /* ------------------------------------------------------------------ limits */
 
 const SIZES = ['1x1', '2x2', '1x2', '1x4', '2x4'];
 const DIRECTIONS = ['left', 'right', 'top', 'bottom'];
 const RATIOS = ['1/1', '1/2'];
-const TYPES = ['image', 'solid'];
+const TYPES = ['image', 'solid', 'html'];
 const FITS = ['cover', 'contain'];
 
 const MAX_CELLS = 200;
@@ -67,10 +80,23 @@ function safeExternalUrl(value) {
 function safeUrl(value) {
   const raw = clampText(value, MAX_URL).trim();
   if (!raw) return '';
-  if (/^\/(?:uploads|assets)\//.test(raw)) return raw;
+  if (/^\/(?:uploads|assets|pages)\//.test(raw)) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
   if (/^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i.test(raw)) return raw;
   return '';
+}
+
+/**
+ * A cell's embedded page: a file uploaded under /pages/, or an absolute
+ * http(s) URL for something hosted elsewhere. Nothing else — the value ends up
+ * in an iframe's src.
+ */
+function safePageUrl(value) {
+  const raw = clampText(value, MAX_URL).trim();
+  if (!raw) return '';
+  // and it has to name an actual file: /pages/.. and /pages/. do not
+  if (/^\/pages\/(?!\.\.?$)[\w.\-]+$/.test(raw)) return raw;
+  return /^https?:\/\//i.test(raw) ? raw : '';
 }
 
 function newId() {
@@ -109,6 +135,8 @@ function normalizeCell(raw) {
     imageTitleColor: safeColor(src.imageTitleColor, '#ffffff'),
     // solid cells
     color: safeColor(src.color, '#7e46b9'),
+    // html cells — rendered in a sandboxed iframe on the home page
+    html: safePageUrl(src.html),
     // shared
     link: safeUrl(src.link),
     overlay: normalizeOverlay(src.overlay),
@@ -168,10 +196,35 @@ function applyEnvDefaults(doc) {
 
 function ensureDirs() {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  fs.mkdirSync(PAGES_DIR, { recursive: true });
+}
+
+/**
+ * Copy the bundled images into the data directory the first time it is made,
+ * so that everything the site serves lives under DATA_DIR — and the admin page
+ * can browse and replace them like any other file.
+ *
+ * An existing directory is never touched: a file missing from it was deleted on
+ * purpose, not a gap to fill back in.
+ */
+function seedAssets() {
+  if (fs.existsSync(ASSETS_DIR)) return;
+  let bundled = [];
+  try {
+    bundled = fs.readdirSync(SEED_ASSETS_DIR).filter((name) => !name.startsWith('.'));
+  } catch {
+    bundled = []; // trimmed checkout: nothing to seed
+  }
+  fs.mkdirSync(ASSETS_DIR, { recursive: true });
+  for (const name of bundled) {
+    fs.copyFileSync(path.join(SEED_ASSETS_DIR, name), path.join(ASSETS_DIR, name));
+  }
+  if (bundled.length) console.log('[store] seeded %d bundled file(s) into %s', bundled.length, ASSETS_DIR);
 }
 
 function seedIfMissing() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+  seedAssets();
   if (fs.existsSync(SITE_FILE)) return;
   const seed = path.join(SEED_DIR, 'site.json');
   const initial = fs.existsSync(seed)
@@ -216,6 +269,8 @@ module.exports = {
   ROOT,
   DATA_DIR,
   UPLOAD_DIR,
+  PAGES_DIR,
+  ASSETS_DIR,
   SITE_FILE,
   MAX_UPLOAD_BYTES,
   SIZES,
