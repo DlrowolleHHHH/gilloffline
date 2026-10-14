@@ -153,9 +153,85 @@ ADMIN_PASSWORD=dev node server/index.js
 ./build_run.sh --logs       # 跟踪日志
 ```
 
-改了代码之后重新部署就跑 `./build_run.sh --update`：它只会把 git 里的新代码拉下来重建镜像。
-数据目录（`HOST_DATA_DIR`，默认 `/app/data`）从头到尾只是一个挂载点，不会被写、不会被删，
-部署完还会核对一遍 `site.json` 的指纹——内容和部署前不一致会明确警告。
+`--update` 就是更新代码用的那条：拉 git 里的新代码重建镜像，数据原样保留——数据目录
+（`HOST_DATA_DIR`，默认 `/app/data`）从头到尾只是一个挂载点，没有任何东西往里写，
+部署完还会核对一遍 `site.json` 的指纹。
+
+### 更新已经部署的站点
+
+代码是 `git pull` 下来的、内容是挂载进去的，所以更新代码就三步：
+
+```bash
+# 1. 本地：提交并推上去
+git add -A && git commit -m "..." && git push origin main
+
+# 2. 服务器：拉代码 → 重建镜像 → 重启 → 核对数据
+ssh <你的服务器>
+cd /root/gilloffline
+set -a && . ./.deploy.env && set +a     # 部署用的环境变量（ADMIN_PASSWORD 等）放这个文件里，不进 git
+./build_run.sh --update
+```
+
+`--update` 内部就是一次 `git pull --ff-only` 加一次完整部署，不用自己先拉。
+跑完应该是这样：
+
+```
+✔ 镜像构建完成
+✔ 容器已启动
+✔ 应用已就绪
+✔ 数据校验：site.json 与部署前完全一致
+```
+
+最后那行要是**黄色警告**（`和部署前不一样了`），说明 `site.json` 在部署期间被改过——
+正常部署不该出现，去 `HOST_DATA_DIR` 看一眼。之后浏览器刷新一下页面就行
+（静态文件是 `no-cache` + ETag，普通刷新就能拿到新版）。
+
+两条纪律：
+
+- **别在服务器的仓库里直接改文件**：`git pull --ff-only` 撞上本地改动会直接失败（脚本会明确报错退出，不会硬来）。
+- 改了**内容**（格子、图片、嵌入页面）不用走这套，管理页里改完立刻生效。
+
+### 构建卡在 Docker Hub
+
+国内服务器上 `docker build` 可能第一步就失败：
+
+```
+failed to resolve reference "docker.io/library/node:22-alpine": ... i/o timeout
+```
+
+**站点不受影响**——脚本在构建这步就退出了，旧容器照常服务。原因一般是本地没有基础镜像、
+又连不上 Docker Hub。拉一份国内能通的、再打上标准标签，之后构建就只用本地镜像了：
+
+```bash
+docker pull docker.1panel.live/library/node:22-alpine
+docker tag docker.1panel.live/library/node:22-alpine node:22-alpine
+./build_run.sh --update
+```
+
+要是想一劳永逸，给 docker 配个镜像加速（`systemctl restart docker` 会让容器中断十几秒，
+`--restart unless-stopped` 会自动把它拉回来，`docker ps` 确认一下即可）：
+
+```bash
+cat > /etc/docker/daemon.json <<'EOF'
+{ "registry-mirrors": ["https://docker.1panel.live"] }
+EOF
+systemctl restart docker && docker ps
+```
+
+> 镜像加速源都不是官方服务，介意的话换成你信得过的地址。`docker pull` + `docker tag`
+> 这个办法换成任何能连通的镜像源都适用，不一定非要用上面那个。
+
+### 日常运维
+
+```bash
+./build_run.sh --no-build     # 不重建，只重启（改了 .deploy.env 里的变量时用）
+./build_run.sh --rebuild      # 不吃缓存重新构建（怀疑构建结果不对时用）
+./build_run.sh --logs         # 跟踪日志，Ctrl+C 退出
+./build_run.sh --stop         # 停掉并删除容器
+docker restart gilloffline    # 比如换了证书，直接重启容器即可
+```
+
+容器挂了会自动重启（`--restart unless-stopped`），健康检查每 30 秒打一次 `/api/health`。
 
 ### 证书
 
@@ -231,7 +307,12 @@ ADMIN_PASSWORD='你的密码' SERVER_NAME=example.com HOST_SSL_DIR=/etc/letsencr
 /app/data/pages/           # 上传的 HTML 页面（及其 css / js / 图片）
 ```
 
-这五样东西就是整个站，备份 `cp -a /app/data /somewhere` 就够了。
+这五样东西就是整个站，备份一条命令：
+
+```bash
+cp -a /app/data /root/data-backup-$(date +%F)
+```
+
 升级、重建镜像、`--update` 拉代码都不会动这个目录——它只是挂载进容器，没有任何东西往里写。
 
 `--update` 跑完会打印一行「数据校验：site.json 与部署前完全一致」——那就是部署没有动过内容的意思；
