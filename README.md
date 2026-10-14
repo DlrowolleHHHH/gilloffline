@@ -285,6 +285,9 @@ ADMIN_PASSWORD=dev node server/index.js
 > 这里说的是 `node` 直跑。用 `build_run.sh` 跑容器时数据放在宿主机的 `/app/data`，
 > 见下面「数据」一节——两者互不影响。
 
+想改棋盘的实现（尺寸、格线、拖拽吸附这些几何部分）之前，先看 [Agent.md](Agent.md)——
+那份文档写的是实现契约和踩过的坑，不是用法。
+
 ## 部署
 
 只需要 Node 后端的话，一条命令构建并启动：
