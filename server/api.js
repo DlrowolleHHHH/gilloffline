@@ -132,10 +132,14 @@ function requireAuth(req, res) {
   return true;
 }
 
-/** Strip directory components and anything that is not a sane filename. */
+/**
+ * Strip directory components and anything that is not a sane filename. Letters
+ * and digits from any script are kept, so 中文文件名 survives the round trip.
+ */
 function sanitizeFilename(name) {
-  const base = path.basename(String(name || '')).replace(/[^\w.\-]/g, '_');
-  return base.replace(/^\.+/, '').slice(0, 96);
+  const base = path.basename(String(name || '')).replace(/[^\p{L}\p{N}._-]/gu, '_');
+  // slice by code point: cutting a surrogate pair in half would corrupt the name
+  return [...base.replace(/^\.+/, '')].slice(0, 96).join('');
 }
 
 /** Absolute path of `name` inside the kind's directory, or null if it is unsafe. */

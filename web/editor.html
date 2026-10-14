@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>创作工具 · Gill Offline</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/svg+xml" href="/assets/logo.svg" />
+    <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/editor.css" />
+  </head>
+  <body>
+    <header class="site-header wrap">
+      <div class="brand">
+        <img class="brand__title" src="/assets/title.png" alt="Gill Offline" />
+        <span class="hint">创作工具</span>
+      </div>
+      <div class="row">
+        <span class="hint" id="session-state"></span>
+        <a class="btn btn--ghost" href="/admin">管理页</a>
+        <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">预览主页</a>
+      </div>
+    </header>
+
+    <main class="wrap editor-wrap">
+      <div class="editor">
+        <aside class="editor__tools" id="tools">
+          <button class="tool" type="button" data-tool="textpng" aria-selected="false">
+            <strong>TXT → PNG</strong>
+            <span>文字做成纯色图片</span>
+          </button>
+          <button class="tool" type="button" data-tool="pngsvg" aria-selected="false">
+            <strong>PNG → SVG</strong>
+            <span>位图描摹成矢量图</span>
+          </button>
+        </aside>
+
+        <section class="editor__panel">
+          <!-- ========================================================= TXT → PNG -->
+          <div class="tool-pane" id="pane-textpng" hidden>
+            <div class="tool-head">
+              <h1>TXT → PNG</h1>
+              <p class="hint">
+                纯色背景 + 纯色文字，尺寸对齐橱窗格子（1x1 / 1x2 / 1x4 / 2x2 / 2x4）。
+                字体用本机装了的那些，导出的图片就是现在预览里的样子。
+              </p>
+            </div>
+
+            <div class="tool-body">
+              <div class="tool-form">
+                <div class="field">
+                  <label for="tp-text">文字（回车换行）</label>
+                  <textarea class="input" id="tp-text" rows="3" spellcheck="false"></textarea>
+                </div>
+
+                <div class="field">
+                  <label>画布尺寸</label>
+                  <div class="size-picker" id="tp-sizes"></div>
+                  <div class="row">
+                    <label class="hint" for="tp-cell">基准格子像素</label>
+                    <select class="input input--slim" id="tp-cell">
+                      <option value="128">128</option>
+                      <option value="192">192</option>
+                      <option value="256">256</option>
+                      <option value="384">384</option>
+                      <option value="512">512</option>
+                    </select>
+                    <span class="hint" id="tp-dims"></span>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="tp-font">字体</label>
+                  <select class="input" id="tp-font"></select>
+                </div>
+
+                <div class="grid-2">
+                  <div class="field">
+                    <label for="tp-fontsize">字号 (px)</label>
+                    <input class="input" id="tp-fontsize" type="number" min="8" max="600" step="1" />
+                  </div>
+                  <div class="field">
+                    <label for="tp-lineheight">行距</label>
+                    <input class="input" id="tp-lineheight" type="number" min="0.8" max="3" step="0.05" />
+                  </div>
+                </div>
+
+                <label class="check">
+                  <input type="checkbox" id="tp-autofit" />
+                  自动适应画布（按内容自动缩放字号）
+                </label>
+
+                <div class="row">
+                  <label class="check"><input type="checkbox" id="tp-bold" /> 粗体</label>
+                  <label class="check"><input type="checkbox" id="tp-italic" /> 斜体</label>
+                  <div class="seg" id="tp-align"></div>
+                </div>
+
+                <div class="grid-2">
+                  <div class="field">
+                    <label for="tp-color">文字颜色</label>
+                    <div class="color-row">
+                      <input class="input" id="tp-color" type="color" />
+                      <input class="input" id="tp-color-text" type="text" spellcheck="false" />
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="tp-bg">背景颜色</label>
+                    <div class="color-row">
+                      <input class="input" id="tp-bg" type="color" />
+                      <input class="input" id="tp-bg-text" type="text" spellcheck="false" />
+                    </div>
+                  </div>
+                </div>
+
+                <label class="check">
+                  <input type="checkbox" id="tp-transparent" />
+                  背景透明（不填底色，做出叠在格子上的字）
+                </label>
+
+                <div class="field">
+                  <label for="tp-name">文件名</label>
+                  <input class="input" id="tp-name" type="text" spellcheck="false" />
+                </div>
+
+                <div class="row row--actions">
+                  <button class="btn btn--primary" id="tp-download" type="button">下载 PNG</button>
+                  <button class="btn" id="tp-save" type="button">存到服务器</button>
+                  <select class="input input--slim" id="tp-kind">
+                    <option value="uploads">uploads（格子图片）</option>
+                    <option value="assets">assets（站点图片）</option>
+                  </select>
+                </div>
+                <p class="hint" id="tp-save-hint"></p>
+              </div>
+
+              <div class="tool-preview">
+                <div class="stage stage--checker">
+                  <canvas id="tp-canvas"></canvas>
+                </div>
+                <p class="hint" id="tp-info"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ======================================================== PNG → SVG -->
+          <div class="tool-pane" id="pane-pngsvg" hidden>
+            <div class="tool-head">
+              <h1>PNG → SVG</h1>
+              <p class="hint">
+                描摹模式会把同色区域变成真正的矢量路径——扁平色块的图（文字图、logo、图标）
+                效果最好；照片会变成海报风。只想把像素原样装进 SVG 就用「直接嵌入」。
+              </p>
+            </div>
+
+            <div class="tool-body">
+              <div class="tool-form">
+                <div class="field">
+                  <label>源图片</label>
+                  <div class="dropzone" id="pv-drop">
+                    <button class="btn" id="pv-pick" type="button">选择图片</button>
+                    <span class="hint">或把图片拖进来</span>
+                    <input type="file" id="pv-file" accept="image/png,image/*" hidden />
+                  </div>
+                  <p class="hint" id="pv-source">还没有选图片。</p>
+                </div>
+
+                <div class="field">
+                  <label for="pv-mode">模式</label>
+                  <select class="input" id="pv-mode">
+                    <option value="trace">矢量描摹（推荐）</option>
+                    <option value="embed">直接嵌入（保持原样像素）</option>
+                  </select>
+                </div>
+
+                <div id="pv-trace-options">
+                  <div class="field">
+                    <label for="pv-colors">颜色数</label>
+                    <select class="input" id="pv-colors">
+                      <option value="8">自动：最多 8 色</option>
+                      <option value="2">2 色</option>
+                      <option value="4">4 色</option>
+                      <option value="16">16 色</option>
+                      <option value="0">不归并（原样颜色）</option>
+                    </select>
+                    <p class="hint">
+                      原图颜色数超过这里设的上限时会自动归并（抗锯齿的边会碎成几百种颜色，
+                      不归并的话路径会又碎又大）。
+                    </p>
+                  </div>
+
+                  <div class="field">
+                    <label for="pv-simplify">轮廓简化：<span id="pv-simplify-value">1</span> px</label>
+                    <input type="range" id="pv-simplify" min="0" max="4" step="0.5" value="1" />
+                    <p class="hint">越大节点越少、文件越小，形状越糙。</p>
+                  </div>
+
+                  <div class="field">
+                    <label for="pv-scale">缩放</label>
+                    <select class="input" id="pv-scale">
+                      <option value="1024">最大边缩到 1024</option>
+                      <option value="512">最大边缩到 512</option>
+                      <option value="0">保持原尺寸</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="pv-name">文件名</label>
+                  <input class="input" id="pv-name" type="text" spellcheck="false" />
+                </div>
+
+                <div class="row row--actions">
+                  <button class="btn btn--primary" id="pv-run" type="button" disabled>开始转换</button>
+                  <button class="btn" id="pv-download" type="button" disabled>下载 SVG</button>
+                  <button class="btn" id="pv-save" type="button" disabled>存到服务器</button>
+                  <select class="input input--slim" id="pv-kind">
+                    <option value="uploads">uploads（格子图片）</option>
+                    <option value="assets">assets（站点图片）</option>
+                  </select>
+                </div>
+                <p class="hint" id="pv-stats"></p>
+              </div>
+
+              <div class="tool-preview">
+                <div class="compare">
+                  <figure>
+                    <figcaption class="hint">原图</figcaption>
+                    <div class="stage stage--checker"><img id="pv-orig" alt="" /></div>
+                  </figure>
+                  <figure>
+                    <figcaption class="hint">SVG</figcaption>
+                    <div class="stage stage--checker"><img id="pv-result" alt="" /></div>
+                  </figure>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <div class="scrim" id="login-scrim" hidden></div>
+    <div class="modal" id="login-modal" hidden>
+      <h2>登录后才能存到服务器</h2>
+      <p class="hint" id="login-hint">用部署时设置的 ADMIN_PASSWORD 登录，和管理页同一个密码。</p>
+      <input class="input" id="login-password" type="password" autocomplete="current-password" placeholder="管理密码" />
+      <div class="row row--end">
+        <button class="btn btn--ghost" id="login-cancel" type="button">取消</button>
+        <button class="btn btn--primary" id="login-ok" type="button">登录</button>
+      </div>
+    </div>
+
+    <script type="module" src="/js/editor.js"></script>
+  </body>
+</html>

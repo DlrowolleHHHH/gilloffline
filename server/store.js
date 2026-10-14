@@ -95,7 +95,7 @@ function safePageUrl(value) {
   const raw = clampText(value, MAX_URL).trim();
   if (!raw) return '';
   // and it has to name an actual file: /pages/.. and /pages/. do not
-  if (/^\/pages\/(?!\.\.?$)[\w.\-]+$/.test(raw)) return raw;
+  if (/^\/pages\/(?!\.\.?$)[\p{L}\p{N}._-]+$/u.test(raw)) return raw;
   return /^https?:\/\//i.test(raw) ? raw : '';
 }
 

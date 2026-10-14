@@ -101,9 +101,9 @@ function serveFrom(res, base, urlPath, cache) {
 }
 
 function serveStatic(res, pathname) {
-  let rel = pathname === '/' ? '/index.html' : pathname;
+  // the pretty URLs, neither of which is linked from the showcase page
+  let rel = { '/admin': '/admin.html', '/editor': '/editor.html' }[pathname] || pathname;
   if (rel.endsWith('/')) rel += 'index.html';
-  if (rel === '/admin') rel = '/admin.html';
 
   const target = resolveInside(WEB_DIR, rel);
   if (target && sendFile(res, target, { cache: 'no-cache' })) return undefined;
