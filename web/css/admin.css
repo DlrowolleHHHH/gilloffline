@@ -246,6 +246,9 @@
     linear-gradient(to bottom, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px);
   background-size: calc(var(--cell-size, 48px) + var(--gap)) calc(var(--cell-size, 48px) + var(--gap));
   background-origin: content-box;
+  /* `local` keeps the lattice glued to the tracks: without it the background
+     stays put while the cells scroll, and nothing lines up any more */
+  background-attachment: local;
 }
 
 .admin-board.is-dragging {

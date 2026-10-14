@@ -99,6 +99,9 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
 
   function onPointerDown(event) {
     if (event.button !== 0 && event.pointerType === 'mouse') return;
+    // the action buttons are buttons: a press there must not start a drag
+    if (event.target.closest('.slot__bar')) return;
+
     const slot = event.target.closest('.slot');
     const handle = event.target.closest('.slot__handle');
 
@@ -122,7 +125,6 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
       });
       return;
     }
-    if (event.target.closest('.slot__bar')) return;
 
     startDrag(event, { kind: 'draw', origin: unitAt(event) });
   }
@@ -133,19 +135,30 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   };
 
   function startDrag(event, info) {
-    drag = { ...info, moved: false, startUnit: unitAt(event) };
+    drag = { ...info, moved: false, captured: false, startUnit: unitAt(event) };
     hideGhost();
     if (info.kind !== 'draw') {
       const slot = root.querySelector(`.slot[data-id="${CSS.escape(info.id)}"]`);
       if (slot) slot.classList.add('is-dragging');
     }
-    root.setPointerCapture(event.pointerId);
-    root.classList.add('is-dragging');
     event.preventDefault();
   }
 
   function onPointerMove(event) {
     if (!drag) return;
+    // Capture only once the pointer really moves. Capturing on pointerdown would
+    // retarget the click that follows to the board, so clicking a cell (or one
+    // of its buttons) would never reach it.
+    if (!drag.captured) {
+      drag.captured = true;
+      try {
+        root.setPointerCapture(event.pointerId);
+      } catch {
+        /* the pointer is already gone */
+      }
+      root.classList.add('is-dragging');
+    }
+
     const unit = unitAt(event);
     if (unit.x !== drag.startUnit.x || unit.y !== drag.startUnit.y) drag.moved = true;
 
@@ -161,16 +174,26 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
 
   function onPointerUp(event) {
     if (!drag) return;
-    const { kind, id, rect, moved } = drag;
-    root.releasePointerCapture?.(event.pointerId);
+    const { kind, id, rect, moved, captured } = drag;
+    if (captured) {
+      try {
+        root.releasePointerCapture(event.pointerId);
+      } catch {
+        /* already released */
+      }
+    }
     root.classList.remove('is-dragging');
     root.querySelectorAll('.slot.is-dragging').forEach((slot) => slot.classList.remove('is-dragging'));
     hideGhost();
     drag = null;
-    justDragged = true;
-    setTimeout(() => {
-      justDragged = false;
-    }, 0);
+    // only a real drag should swallow the click that follows it — a plain click
+    // on a cell has to reach the click handler and open the editor
+    if (moved) {
+      justDragged = true;
+      setTimeout(() => {
+        justDragged = false;
+      }, 0);
+    }
 
     if (!rect) return;
     if (!legal(rect, id || null)) {

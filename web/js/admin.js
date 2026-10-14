@@ -113,6 +113,19 @@ function renderSite() {
   const auto = $('site-columns').querySelector('option[value="0"]');
   auto.disabled = isBoard();
   auto.textContent = isBoard() ? '自动（棋盘布局用不了）' : '自动（按窗口宽度铺满）';
+  // nor does the board allow a column count below its widest cell
+  const floor = widestCell();
+  for (const option of $('site-columns').options) {
+    const value = Number(option.value);
+    option.disabled = (value === 0 && isBoard()) || (value > 0 && value < floor);
+  }
+  const columnsHint = $('site-columns-hint');
+  if (columnsHint) {
+    columnsHint.textContent =
+      isBoard() && floor > 1
+        ? `棋盘上最宽的格子占 ${floor} 列，所以列数不能小于 ${floor}。`
+        : COLUMNS_HINT;
+  }
   for (const input of document.querySelectorAll('[data-site]')) {
     const key = input.dataset.site;
     if (input.type === 'checkbox') input.checked = site[key] === true;
@@ -131,6 +144,15 @@ function bindSitePanel() {
     const isToggle = input.type === 'checkbox';
     input.addEventListener(isToggle ? 'change' : 'input', () => {
       const key = input.dataset.site;
+      if (key === 'columns' && isBoard()) {
+        const floor = widestCell();
+        const wanted = Number(input.value) || 0;
+        if (wanted > 0 && wanted < floor) {
+          toast(`棋盘上最宽的格子占 ${floor} 列，列数不能比它小`, 'error');
+          input.value = String(Number(state.doc.site?.columns) || 12);
+          return;
+        }
+      }
       state.doc.site = state.doc.site || {};
       state.doc.site[key] = isToggle ? input.checked : input.value;
       if (key === 'accent') document.documentElement.style.setProperty('--accent', input.value);
@@ -148,6 +170,9 @@ function bindSitePanel() {
 
 /* --------------------------------------------------------------- the board */
 
+/** The standing explanation under the column select. */
+const COLUMNS_HINT = $('site-columns-hint').textContent;
+
 const boardEl = $('board');
 
 const board = createBoard({
@@ -161,8 +186,16 @@ const board = createBoard({
   onChange: () => markDirty(),
 });
 
-/** A board is a fixed layout, so it needs a real column count. */
-const boardCols = () => Math.min(12, Math.max(3, Number(state.doc.site?.columns) || 12));
+/** The widest cell on the board — the column count may never go below it. */
+const widestCell = () =>
+  isBoard() ? state.doc.cells.reduce((max, cell) => Math.max(max, cellUnits(cell).w), 1) : 1;
+
+/**
+ * A board is a fixed layout, so it needs a real column count — and it can never
+ * be narrower than the widest cell, or that cell would have to be squeezed.
+ */
+const boardCols = () =>
+  Math.min(12, Math.max(3, widestCell(), Number(state.doc.site?.columns) || 12));
 const isBoard = () => state.doc.site?.layout === 'board';
 
 /** What to draw: the stored positions, or how CSS would pack the flow today. */
