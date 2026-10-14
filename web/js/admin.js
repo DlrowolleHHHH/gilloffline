@@ -523,7 +523,7 @@ function bindUpload(buttonId, inputId, kind, field, okMessage) {
     event.target.value = '';
     if (!file) return;
     try {
-      const result = await api(fileUrl(kind, file.name), {
+      const result = await api(filesApi(kind, file.name), {
         method: 'POST',
         raw: true,
         headers: { 'Content-Type': contentTypeOf(file) },
