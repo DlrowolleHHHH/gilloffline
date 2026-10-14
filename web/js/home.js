@@ -1,4 +1,4 @@
-import { applyGridLayout, assetUrl, createCell, currentUserid, fetchSite } from './shared.js';
+import { applyGridLayout, assetUrl, createCell, currentUserid, fetchSite, gapPx } from './shared.js';
 
 const grid = document.getElementById('grid');
 
@@ -43,6 +43,8 @@ function renderIcp(site) {
 function applySite(site) {
   document.title = site.title || 'Gill Offline';
   document.documentElement.style.setProperty('--accent', site.accent || '#7e46b9');
+  // the cell spacing setting (s / m / l) is the grid's --gap
+  grid.style.setProperty('--gap', `${gapPx(site.gap)}px`);
 
   // the title bar is opt-in: it only shows once the site settings switch it on
   const subtitle = document.getElementById('subtitle');

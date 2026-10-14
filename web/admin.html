@@ -71,26 +71,6 @@
               <label for="site-accent">主题强调色</label>
               <input class="input" id="site-accent" type="color" data-site="accent" />
             </div>
-            <div class="field field--wide">
-              <label for="site-columns">每行列数</label>
-              <select class="input" id="site-columns" data-site="columns">
-                <option value="0">自动（按窗口宽度铺满）</option>
-                <option value="3">3 列</option>
-                <option value="4">4 列</option>
-                <option value="5">5 列</option>
-                <option value="6">6 列</option>
-                <option value="7">7 列</option>
-                <option value="8">8 列</option>
-                <option value="9">9 列</option>
-                <option value="10">10 列</option>
-                <option value="12">12 列</option>
-              </select>
-              <p class="hint" id="site-columns-hint">
-                自动 = 现在的行为（窗口多宽就铺几列，格子最大 152px）。选固定列数后，格子会
-                <strong>等分整行宽度</strong>——想要大格子就选少几列，想要密集的小格子就选多几列；
-                宽格子的跨度会自动收到列数以内，窄窗口也会减少列数而不是把格子挤成碎块。
-              </p>
-            </div>
             <div class="field--wide">
               <label class="check">
                 <input type="checkbox" id="site-subtitle-enabled" data-site="subtitleEnabled" />
@@ -180,7 +160,50 @@
 
         <div class="admin-toolbar">
           <strong id="cell-count"></strong>
-          <span class="hint">
+
+          <label class="tool" for="site-columns">
+            <span class="tool__label">列数</span>
+            <select
+              class="input input--slim"
+              id="site-columns"
+              data-site="columns"
+              title="自动 = 窗口多宽就铺几列（格子最大 152px）。固定列数后，格子等分整行宽度——想要大格子就选少几列，想要密集的小格子就选多几列；宽格子的跨度会自动收到列数以内，窄窗口也会减少列数而不是把格子挤成碎块。"
+            >
+              <option value="0">自动</option>
+              <option value="3">3 列</option>
+              <option value="4">4 列</option>
+              <option value="5">5 列</option>
+              <option value="6">6 列</option>
+              <option value="7">7 列</option>
+              <option value="8">8 列</option>
+              <option value="9">9 列</option>
+              <option value="10">10 列</option>
+              <option value="12">12 列</option>
+            </select>
+          </label>
+
+          <label class="tool" for="site-gap">
+            <span class="tool__label">间隔</span>
+            <select class="input input--slim" id="site-gap" data-site="gap" title="格子之间留多少空，主页和棋盘都按它排。">
+              <option value="s">紧凑 S</option>
+              <option value="m">标准 M</option>
+              <option value="l">宽松 L</option>
+            </select>
+          </label>
+
+          <label class="tool" for="board-zoom">
+            <span class="tool__label">缩放</span>
+            <select class="input input--slim" id="board-zoom" title="只看棋盘视图，不影响主页。格子排得密的时候缩小一点，能一眼看全整块棋盘。">
+              <option value="0.5">50%</option>
+              <option value="0.75">75%</option>
+              <option value="1" selected>100%</option>
+              <option value="1.25">125%</option>
+              <option value="1.5">150%</option>
+            </select>
+          </label>
+
+          <span class="hint" id="site-columns-hint" hidden></span>
+          <span class="hint admin-toolbar__help">
             在空白处拖动画出格子 · 拖动格子换位置 · 拖右下角的小方块改尺寸 · 单击格子编辑内容
           </span>
         </div>
@@ -246,7 +269,7 @@
             </div>
             <div class="field">
               <label for="ed-pos-y">行（从上往下，0 起）</label>
-              <input class="input" id="ed-pos-y" type="number" min="0" max="199" step="1" />
+              <input class="input" id="ed-pos-y" type="number" min="0" max="999" step="1" />
             </div>
           </div>
           <div class="grid-2">

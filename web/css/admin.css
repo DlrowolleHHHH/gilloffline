@@ -233,6 +233,8 @@
  * aimed at. It scrolls sideways when the panel is too narrow for all columns.
  */
 .admin-board {
+  /* a fallback only: the JS sets --gap from the site's spacing × the zoom, so
+     what you aim at is spaced like the real page */
   --gap: 6px;
   position: relative;
   justify-content: start;
@@ -349,12 +351,30 @@
 .admin-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
-.admin-toolbar .hint {
+/* a caption and its compact select, so three controls fit on one line */
+.tool {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+
+.tool__label {
+  white-space: nowrap;
+}
+
+.admin-toolbar .input--slim {
+  padding: 5px 7px;
+}
+
+/* the board instructions take whatever room is left at the end of the row */
+.admin-toolbar__help {
   margin-left: auto;
 }
 

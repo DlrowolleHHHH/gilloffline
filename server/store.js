@@ -57,6 +57,8 @@ const TYPES = ['image', 'solid', 'html'];
 const FITS = ['cover', 'contain'];
 /** 'flow' = an ordered list CSS packs; 'board' = every cell has a position. */
 const LAYOUTS = ['flow', 'board'];
+/** How much air to leave between cells: s / m / l → 8 / 16 / 28 px. */
+const GAP_LEVELS = ['s', 'm', 'l'];
 
 const MAX_CELLS = 200;
 const MAX_TITLE = 120;
@@ -67,7 +69,9 @@ const MAX_COLS = 12;
 const MIN_BOARD_COLS = 3;
 const DEFAULT_BOARD_COLS = 12;
 const MAX_CELL_UNITS = 12;
-const MAX_ROWS = 200;
+/** Rows are not really limited — this only stops a runaway number from being
+ *  stored. The board grows as far as anyone drags a cell. */
+const MAX_ROWS = 1000;
 
 /* -------------------------------------------------------------- sanitizing */
 
@@ -278,6 +282,8 @@ function normalizeDoc(raw) {
       // 'flow' = an ordered list that CSS packs; 'board' = cells have positions.
       // Absent means flow, which is what every document written before boards is.
       layout,
+      // the air between cells, three steps; the CSS var --gap comes from it
+      gap: oneOf(site.gap, GAP_LEVELS, 'm'),
     },
     cells,
   };

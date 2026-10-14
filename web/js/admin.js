@@ -10,6 +10,7 @@ import {
   defaultCell,
   defaultOverlay,
   firstFreeSpot,
+  gapPx,
   newId,
   packBoard,
   rectFree,
@@ -112,20 +113,18 @@ function renderSite() {
   // '自动' only means something to the flow layout
   const auto = $('site-columns').querySelector('option[value="0"]');
   auto.disabled = isBoard();
-  auto.textContent = isBoard() ? '自动（棋盘布局用不了）' : '自动（按窗口宽度铺满）';
+  auto.textContent = isBoard() ? '自动（棋盘用不了）' : '自动';
   // nor does the board allow a column count below its widest cell
   const floor = widestCell();
   for (const option of $('site-columns').options) {
     const value = Number(option.value);
     option.disabled = (value === 0 && isBoard()) || (value > 0 && value < floor);
   }
+  // the standing explanation lives in the control's tooltip; this line only
+  // speaks up when the board is currently refusing something
   const columnsHint = $('site-columns-hint');
-  if (columnsHint) {
-    columnsHint.textContent =
-      isBoard() && floor > 1
-        ? `棋盘上最宽的格子占 ${floor} 列，所以列数不能小于 ${floor}。`
-        : COLUMNS_HINT;
-  }
+  columnsHint.hidden = !(isBoard() && floor > 1);
+  columnsHint.textContent = `棋盘上最宽的格子占 ${floor} 列，列数不能小于它。`;
   for (const input of document.querySelectorAll('[data-site]')) {
     const key = input.dataset.site;
     if (input.type === 'checkbox') input.checked = site[key] === true;
@@ -163,15 +162,17 @@ function bindSitePanel() {
         }
         if (state.editingId) renderPreview();
       }
+      // the gap is drawn by the board and the preview too, not just the home page
+      if (key === 'gap') {
+        layoutBoard();
+        if (state.editingId) renderPreview();
+      }
       markDirty();
     });
   }
 }
 
 /* --------------------------------------------------------------- the board */
-
-/** The standing explanation under the column select. */
-const COLUMNS_HINT = $('site-columns-hint').textContent;
 
 const boardEl = $('board');
 
@@ -197,9 +198,28 @@ const widestCell = () =>
 const boardCols = () =>
   Math.min(12, Math.max(3, widestCell(), Number(state.doc.site?.columns) || 12));
 const isBoard = () => state.doc.site?.layout === 'board';
+/** The layout the drawer's preview should mimic. */
+const layoutMode = () => (isBoard() ? 'board' : 'flow');
 
 /** What to draw: the stored positions, or how CSS would pack the flow today. */
 const boardCells = () => (isBoard() ? state.doc.cells : packBoard(state.doc.cells, boardCols()));
+
+/**
+ * The editor's zoom. Not site data: it is how *this* person likes to look at the
+ * board, so it is not saved anywhere and starts at 100% on every visit.
+ */
+let boardZoom = 1;
+
+/**
+ * Lay the board out at its own scale: the site's real spacing, zoomed so the
+ * board stays a comfortable size to aim at. The gap is set back to its unscaled
+ * value first — the layout pass multiplies it by the zoom itself, and feeding it
+ * a scaled gap would compound on every call.
+ */
+function layoutBoard(cells = boardCells()) {
+  boardEl.style.setProperty('--gap', `${gapPx(state.doc.site?.gap)}px`);
+  applyGridLayout(boardEl, boardCols(), { layout: 'board', cells, minCell: 56, scale: boardZoom });
+}
 
 /** The first board edit turns a flow document into a positioned one. */
 function toBoard() {
@@ -213,9 +233,17 @@ function toBoard() {
 function renderBoard() {
   const cells = boardCells();
   board.render(cells, { columns: boardCols(), selectedId: state.editingId });
-  applyGridLayout(boardEl, boardCols(), { layout: 'board', cells, minCell: 56 });
-  $('board-status').textContent = isBoard() ? '' : '现在是自动排布：在棋盘上动一下，就会按现在这个样子固定下来。';
+  layoutBoard(cells);
+  $('board-status').textContent = boardNotices();
   renderCount();
+}
+
+/** The standing notes under the board: how it paints, and the current zoom. */
+function boardNotices() {
+  const notes = [];
+  if (!isBoard()) notes.push('现在是自动排布：在棋盘上动一下，就会按现在这个样子固定下来。');
+  if (boardZoom !== 1) notes.push(`棋盘缩放 ${Math.round(boardZoom * 100)}%，只影响这里的显示。`);
+  return notes.join(' ');
 }
 
 function renderCount() {
@@ -280,6 +308,18 @@ function bindBoard() {
   });
   boardEl.tabIndex = 0;
   boardEl.addEventListener('keydown', board.onKeyDown);
+
+  $('board-zoom').addEventListener('change', (event) => {
+    boardZoom = Number(event.target.value) || 1;
+    layoutBoard();
+    $('board-status').textContent = boardNotices();
+  });
+
+  // the cell size is measured from the panel, so a resize has to re-measure
+  window.addEventListener('resize', () => {
+    layoutBoard();
+    if (state.editingId) renderPreview();
+  });
 }
 
 /* ------------------------------------------------------------------ editor */
@@ -508,7 +548,7 @@ function onEdited() {
   const cell = currentCell();
   if (cell) {
     board.refresh(boardCells().find((item) => item.id === cell.id) || cell);
-    applyGridLayout(boardEl, boardCols(), { layout: 'board', cells: boardCells(), minCell: 56 });
+    layoutBoard();
   }
   markDirty();
 }
@@ -518,7 +558,9 @@ function renderPreview() {
   preview.replaceChildren();
   if (!cell) return;
   preview.append(createCell(cell));
-  // the preview follows the site's layout settings, so it looks like the real page
+  // the preview follows the site's layout settings, gap included, so it looks
+  // like the real page
+  preview.style.setProperty('--gap', `${gapPx(state.doc.site?.gap)}px`);
   applyGridLayout(preview, Number(state.doc.site?.columns) || 0, { layout: layoutMode(), cells: [cell] });
 }
 

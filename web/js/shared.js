@@ -244,9 +244,13 @@ export function assetUrl(name) {
 
 /** Smallest a cell may get before the layout drops a column instead. */
 const MIN_CELL = 96;
-/** The board is at most this wide, and at most this tall. */
+/** The board is at most this wide — and only nominally this tall. */
 export const MAX_COLS = 12;
-export const MAX_ROWS = 200;
+export const MAX_ROWS = 1000;
+
+/** The air between cells, three steps. Mirrors GAP_LEVELS in server/store.js. */
+export const GAP_PX = { s: 8, m: 16, l: 28 };
+export const gapPx = (level) => GAP_PX[level] || GAP_PX.m;
 
 /** What the layout pass positions: the cells, or their wrappers on the board. */
 const PLACED = ':scope > [data-w]';
@@ -326,7 +330,11 @@ export function packBoard(cells, cols) {
  * server) to keep those positions inside the board and out of each other's way:
  * CSS grid happily stacks explicitly placed items on top of one another.
  */
-export function applyGridLayout(grid, columns, { layout = 'flow', cells = [], minCell = MIN_CELL } = {}) {
+export function applyGridLayout(
+  grid,
+  columns,
+  { layout = 'flow', cells = [], minCell = MIN_CELL, scale = 1 } = {}
+) {
   const style = getComputedStyle(grid);
   const gap = Number.parseFloat(style.getPropertyValue('--gap')) || 16;
   const items = [...grid.querySelectorAll(PLACED)];
@@ -337,12 +345,23 @@ export function applyGridLayout(grid, columns, { layout = 'flow', cells = [], mi
 
   if (layout === 'board') {
     const cols = Math.max(1, Math.min(MAX_COLS, Math.round(columns) || MAX_COLS));
-    const size = Math.max(minCell, (width - (cols - 1) * gap) / cols);
+    // `scale` is the editor's zoom: below 1 more of the board fits into the
+    // panel, above 1 it overflows and scrolls. It multiplies the gap as well as
+    // the cell, so the whole board scales as one picture — the fit itself is
+    // measured at the site's real spacing, which keeps 50% exactly half.
+    const zoomGap = gap * scale;
+    const size = Math.max(minCell, (width - (cols - 1) * gap) / cols) * scale;
     grid.classList.add('is-fixed');
+    grid.style.setProperty('--gap', `${zoomGap.toFixed(2)}px`);
     grid.style.setProperty('--cols', String(cols));
     grid.style.setProperty('--cell-size', `${size.toFixed(2)}px`);
     grid.dataset.cols = String(cols);
-    grid.dataset.pitch = (size + gap).toFixed(2); // the editor measures pointers with this
+    grid.dataset.pitch = (size + zoomGap).toFixed(2); // the editor measures pointers with this
+    // where the tracks actually start: the board has a border and padding, and a
+    // pointer has to be measured from the content box, not the border box
+    const padX = grid.clientLeft + (Number.parseFloat(style.paddingLeft) || 0);
+    const padY = grid.clientTop + (Number.parseFloat(style.paddingTop) || 0);
+    grid.dataset.inset = `${padX.toFixed(2)},${padY.toFixed(2)}`;
 
     const byId = new Map(cells.map((cell) => [cell.id, cell]));
     for (const item of items) {

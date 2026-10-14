@@ -41,15 +41,17 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   /* ------------------------------------------------------------- geometry */
 
   /**
-   * Pointer position → the grid unit under it. The pitch (cell + gap) is stashed
-   * on the element by the layout pass, so this stays a couple of subtractions
-   * even while dragging. The board is left-aligned, so the origin is its corner.
+   * Pointer position → the grid unit under it. The pitch (cell + gap) and the
+   * content-box inset are stashed on the element by the layout pass, so this
+   * stays a few subtractions even while dragging — and it stays exact at every
+   * zoom level, where being 7px out would be a good part of a cell.
    */
   function unitAt(event) {
     const box = root.getBoundingClientRect();
     const pitch = Number(root.dataset.pitch) || 60;
-    const x = Math.floor((event.clientX - box.left + root.scrollLeft) / pitch);
-    const y = Math.floor((event.clientY - box.top + root.scrollTop) / pitch);
+    const [insetX, insetY] = (root.dataset.inset || '0,0').split(',').map(Number);
+    const x = Math.floor((event.clientX - box.left + root.scrollLeft - insetX) / pitch);
+    const y = Math.floor((event.clientY - box.top + root.scrollTop - insetY) / pitch);
     return { x: clamp(x, 0, columns - 1), y: Math.max(0, y) };
   }
 
@@ -134,6 +136,12 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
     return cell && cell.pos ? { x: cell.pos.x, y: cell.pos.y } : { x: 0, y: 0 };
   };
 
+  /**
+   * The gesture's listeners live on the window, not on the board. A drag that
+   * starts in the last row — the normal way to make the canvas grow — is outside
+   * the board on its very first move, and a board-level listener would never
+   * hear about it: the drag would die before it began.
+   */
   function startDrag(event, info) {
     drag = { ...info, moved: false, captured: false, startUnit: unitAt(event) };
     hideGhost();
@@ -141,7 +149,16 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
       const slot = root.querySelector(`.slot[data-id="${CSS.escape(info.id)}"]`);
       if (slot) slot.classList.add('is-dragging');
     }
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
     event.preventDefault();
+  }
+
+  function stopListening() {
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerCancel);
   }
 
   function onPointerMove(event) {
@@ -174,6 +191,7 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
 
   function onPointerUp(event) {
     if (!drag) return;
+    stopListening();
     const { kind, id, rect, moved, captured } = drag;
     if (captured) {
       try {
@@ -219,6 +237,7 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
 
   const onPointerCancel = () => {
     if (!drag) return;
+    stopListening();
     drag = null;
     hideGhost();
     root.classList.remove('is-dragging');
@@ -267,9 +286,13 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
 
   const rows = () => currentRows;
 
-  /** Always leave a couple of empty rows below the content to draw into. */
+  /**
+   * The board is as tall as its content plus two empty rows to draw into —
+   * every caller asks for `farthest + 2`. There is no row ceiling: drag a cell
+   * down and the canvas follows.
+   */
   function growRows(wanted) {
-    const next = Math.max(6, wanted);
+    const next = Math.max(2, wanted);
     if (next === currentRows) return;
     currentRows = next;
     root.style.minHeight = `calc(${next} * var(--cell-size, 48px) + ${next - 1} * var(--gap, 6px))`;
@@ -325,10 +348,8 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   function bind({ onDraw, onPlace: onPlaceCb } = {}) {
     onCreate = onDraw || (() => {});
     onPlace = onPlaceCb || (() => {});
+    // only the start: from there the gesture follows the pointer on the window
     root.addEventListener('pointerdown', onPointerDown);
-    root.addEventListener('pointermove', onPointerMove);
-    root.addEventListener('pointerup', onPointerUp);
-    root.addEventListener('pointercancel', onPointerCancel);
     root.addEventListener('lostpointercapture', onPointerCancel);
 
     // clicks: select, then the bar's buttons
