@@ -180,10 +180,13 @@
 
         <div class="admin-toolbar">
           <strong id="cell-count"></strong>
-          <span class="hint">拖动格子左上角的 ⠿ 可排序，悬浮格子后可编辑 / 复制 / 删除</span>
+          <span class="hint">
+            在空白处拖动画出格子 · 拖动格子换位置 · 拖右下角的小方块改尺寸 · 单击格子编辑内容
+          </span>
         </div>
 
-        <div class="grid admin-grid" id="list"></div>
+        <div class="grid admin-board" id="board"></div>
+        <p class="hint board-status" id="board-status" aria-live="polite"></p>
       </section>
     </main>
 
@@ -232,6 +235,34 @@
               <input class="input" id="ed-border-color-text" type="text" spellcheck="false" placeholder="#7e46b9" />
             </div>
           </div>
+        </fieldset>
+
+        <fieldset class="fieldset" id="fs-pos">
+          <legend>位置与尺寸</legend>
+          <div class="grid-2">
+            <div class="field">
+              <label for="ed-pos-x">列（从左往右，0 起）</label>
+              <input class="input" id="ed-pos-x" type="number" min="0" max="11" step="1" />
+            </div>
+            <div class="field">
+              <label for="ed-pos-y">行（从上往下，0 起）</label>
+              <input class="input" id="ed-pos-y" type="number" min="0" max="199" step="1" />
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="ed-pos-w">宽（格）</label>
+              <input class="input" id="ed-pos-w" type="number" min="1" max="12" step="1" />
+            </div>
+            <div class="field">
+              <label for="ed-pos-h">高（格）</label>
+              <input class="input" id="ed-pos-h" type="number" min="1" max="12" step="1" />
+            </div>
+          </div>
+          <p class="hint">
+            想精确到格就填这里；想快点就在棋盘上拖（拖空白画新格子、拖格子换位置、拖右下角改尺寸）。
+            和别的格子重叠时不会生效。
+          </p>
         </fieldset>
 
         <fieldset class="fieldset" id="fs-image">

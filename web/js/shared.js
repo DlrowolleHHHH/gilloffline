@@ -78,6 +78,26 @@ export function defaultCell(overrides = {}) {
  */
 const FRAME_SANDBOX = 'allow-scripts allow-forms allow-popups allow-modals allow-downloads';
 
+/**
+ * The one reader of a cell's size. A cell placed on a board carries `pos`
+ * (x/y/w/h in grid units, possibly a freehand size); everything else falls back
+ * to the named size. Nothing ever derives one from the other — the key order in
+ * `size` is 行×列 (`3x6` is 6 wide, 3 tall), so string-parsing it is a trap.
+ */
+export function cellUnits(cell) {
+  const pos = cell && cell.pos;
+  if (pos && Number.isFinite(pos.w) && Number.isFinite(pos.h)) {
+    return { w: Math.max(1, Math.round(pos.w)), h: Math.max(1, Math.round(pos.h)) };
+  }
+  const size = SIZES[(cell && cell.size) || ''] || SIZES['1x1'];
+  return { w: size.w, h: size.h };
+}
+
+/**
+ * The placement classes describe the named size, which is what the flow layout
+ * uses; a cell drawn freehand on a board carries a `pos` instead and gets its
+ * real size from the board layout pass.
+ */
 export function cellClasses(cell) {
   const size = SIZES[cell.size] || SIZES['1x1'];
   const classes = ['cell', `cell--${cell.type}`, `w${size.w}`, `h${size.h}`];
@@ -117,6 +137,7 @@ export function createCell(cell) {
   // the layout pass needs the units; the classes alone are not readable back
   node.dataset.w = SIZES[cell.size] ? SIZES[cell.size].w : 1;
   node.dataset.h = SIZES[cell.size] ? SIZES[cell.size].h : 1;
+  if (cell.link) node.draggable = false; // a native link drag fights the board
   applyCellStyle(node, cell);
 
   if (cell.link) {
@@ -223,43 +244,141 @@ export function assetUrl(name) {
 
 /** Smallest a cell may get before the layout drops a column instead. */
 const MIN_CELL = 96;
+/** The board is at most this wide, and at most this tall. */
+export const MAX_COLS = 12;
+export const MAX_ROWS = 200;
+
+/** What the layout pass positions: the cells, or their wrappers on the board. */
+const PLACED = ':scope > [data-w]';
+
+/* ------------------------------------------------------------------ geometry */
+
+/** Flat rects ({x,y,w,h} in grid units) — what all the collision checks speak. */
+export const rectsOverlap = (a, b) =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+export const rectOf = (cell) => (cell.pos ? { id: cell.id, ...cell.pos } : null);
+
+/** Do the placed rects (a list of flat rects) leave this one alone? */
+export const rectFree = (rects, rect) => !rects.some((other) => rectsOverlap(other, rect));
+
+/**
+ * First free spot for a w×h box, scanning row by row — the same order CSS
+ * `grid-auto-flow: row dense` fills, which is what makes the flow → board
+ * conversion reproduce the layout that is on screen today.
+ */
+export function firstFreeSpot(rects, cols, w, h) {
+  const width = Math.max(1, Math.min(w, cols));
+  for (let y = 0; y < MAX_ROWS; y += 1) {
+    for (let x = 0; x + width <= cols; x += 1) {
+      const rect = { x, y, w: width, h };
+      if (rectFree(rects, rect)) return rect;
+    }
+  }
+  return { x: 0, y: 0, w: width, h };
+}
+
+/**
+ * Keep the positions that are free and inside the board, and re-place the rest —
+ * what the server does on save, mirrored here so an import previews correctly.
+ */
+export function repairBoard(cells, cols) {
+  const rects = [];
+  return cells.map((cell) => {
+    const { w, h } = cellUnits(cell);
+    const width = Math.max(1, Math.min(w, cols));
+    const wanted = cell.pos && {
+      x: Math.round(cell.pos.x) || 0,
+      y: Math.round(cell.pos.y) || 0,
+      w: width,
+      h: Math.max(1, Math.round(cell.pos.h) || h),
+    };
+    const fits =
+      wanted && wanted.x >= 0 && wanted.y >= 0 && wanted.x + wanted.w <= cols && rectFree(rects, wanted);
+    const rect = fits ? wanted : firstFreeSpot(rects, cols, width, h);
+    rects.push({ id: cell.id, ...rect });
+    return { ...cell, pos: rect };
+  });
+}
+
+/** Give every cell a position, packing them in array order (the flow order). */
+export function packBoard(cells, cols) {
+  const rects = [];
+  return cells.map((cell) => {
+    const { w, h } = cellUnits(cell);
+    const rect = firstFreeSpot(rects, cols, w, h);
+    rects.push({ id: cell.id, ...rect });
+    return { ...cell, pos: rect };
+  });
+}
+
+/* -------------------------------------------------------------------- layout */
 
 /**
  * Lay out a grid of cells.
  *
- * `columns = 0` leaves it to CSS (auto-fill: as many cells as fit, capped at
- * --cell). A number means the owner asked for that many columns: the cells are
- * then sized to divide the available width evenly, so a 4-column layout really
- * is four big cells instead of four small ones. Either way a wide cell's span
- * is capped at the column count, so nothing can spill out of the grid — and a
- * narrow window drops columns rather than shrinking cells into confetti.
+ * `layout: 'flow'` is the original behaviour: cells are an ordered list and CSS
+ * places them (auto-fill when `columns` is 0, otherwise that many evenly sized
+ * columns, with wide cells capped and dropped on narrow windows).
+ *
+ * `layout: 'board'` positions every item from its own x/y/w/h — nothing reflows,
+ * the cells just scale with the container. It is up to the caller (and the
+ * server) to keep those positions inside the board and out of each other's way:
+ * CSS grid happily stacks explicitly placed items on top of one another.
  */
-export function applyGridLayout(grid, columns) {
+export function applyGridLayout(grid, columns, { layout = 'flow', cells = [], minCell = MIN_CELL } = {}) {
   const style = getComputedStyle(grid);
   const gap = Number.parseFloat(style.getPropertyValue('--gap')) || 16;
-  const cells = [...grid.querySelectorAll('.cell')];
+  const items = [...grid.querySelectorAll(PLACED)];
+  const width = grid.clientWidth || grid.parentElement?.clientWidth || 0;
+  if (!width) return; // hidden (a closed drawer): the next pass will size it
+
+  grid.classList.toggle('is-board', layout === 'board');
+
+  if (layout === 'board') {
+    const cols = Math.max(1, Math.min(MAX_COLS, Math.round(columns) || MAX_COLS));
+    const size = Math.max(minCell, (width - (cols - 1) * gap) / cols);
+    grid.classList.add('is-fixed');
+    grid.style.setProperty('--cols', String(cols));
+    grid.style.setProperty('--cell-size', `${size.toFixed(2)}px`);
+    grid.dataset.cols = String(cols);
+    grid.dataset.pitch = (size + gap).toFixed(2); // the editor measures pointers with this
+
+    const byId = new Map(cells.map((cell) => [cell.id, cell]));
+    for (const item of items) {
+      const cell = byId.get(item.dataset.id);
+      const { w, h } = cellUnits(cell || {});
+      const pos = (cell && cell.pos) || { x: 0, y: 0 };
+      const span = Math.max(1, Math.min(w, cols));
+      const x = Math.max(0, Math.min(Math.round(pos.x) || 0, cols - span));
+      const y = Math.max(0, Math.round(pos.y) || 0);
+      item.style.gridColumn = `${x + 1} / span ${span}`;
+      item.style.gridRow = `${y + 1} / span ${Math.max(1, h)}`;
+    }
+    return;
+  }
+
+  // switching back from a board must not leave absolute placement behind
+  for (const item of items) item.style.removeProperty('grid-row');
 
   if (!columns) {
     grid.classList.remove('is-fixed');
     grid.style.removeProperty('--cols');
     grid.style.removeProperty('--cell-size');
-    for (const cell of cells) cell.style.removeProperty('grid-column');
+    for (const item of items) item.style.removeProperty('grid-column');
     return;
   }
 
-  const width = grid.clientWidth || grid.parentElement?.clientWidth || 0;
-  if (!width) return; // hidden (a closed drawer): the next pass will size it
-
-  const fit = Math.max(1, Math.floor((width + gap) / (MIN_CELL + gap)));
+  const fit = Math.max(1, Math.floor((width + gap) / (minCell + gap)));
   const cols = Math.max(1, Math.min(Math.round(columns), fit));
-  const size = Math.max(MIN_CELL, (width - (cols - 1) * gap) / cols);
+  const size = Math.max(minCell, (width - (cols - 1) * gap) / cols);
 
   grid.classList.add('is-fixed');
   grid.style.setProperty('--cols', String(cols));
   grid.style.setProperty('--cell-size', `${size.toFixed(2)}px`);
-  for (const cell of cells) {
-    const span = Number(cell.dataset.w) || 1;
-    cell.style.gridColumn = `span ${Math.min(span, cols)}`;
+  for (const item of items) {
+    const span = Number(item.dataset.w) || 1;
+    item.style.gridColumn = `span ${Math.min(span, cols)}`;
   }
 }
 

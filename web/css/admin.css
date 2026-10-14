@@ -225,6 +225,88 @@
   text-align: center;
 }
 
+/* ------------------------------------------------------------------ board */
+
+/*
+ * The board is its own fixed-scale canvas: 1 unit = --cell-size (set by the JS
+ * layout pass), the empty units drawn as a lattice so it is obvious what can be
+ * aimed at. It scrolls sideways when the panel is too narrow for all columns.
+ */
+.admin-board {
+  --gap: 6px;
+  position: relative;
+  justify-content: start;
+  padding: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background-color: color-mix(in srgb, var(--ink-900) 55%, transparent);
+  background-image: linear-gradient(to right, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px);
+  background-size: calc(var(--cell-size, 48px) + var(--gap)) calc(var(--cell-size, 48px) + var(--gap));
+  background-origin: content-box;
+}
+
+.admin-board.is-dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+
+.board__slot {
+  touch-action: none;
+  cursor: grab;
+}
+
+.board__slot.is-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+.board__slot.is-selected .slot__bar {
+  opacity: 1;
+}
+
+/* the rectangle the current gesture would produce */
+.board__ghost {
+  z-index: 4;
+  pointer-events: none;
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.board__ghost.is-bad {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+}
+
+/* bottom-right grip: drag it to resize the cell */
+.slot__handle {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  z-index: 6;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--ink-900);
+  border-radius: 4px;
+  background: var(--accent);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.16s;
+}
+
+.board__slot:hover .slot__handle,
+.board__slot.is-selected .slot__handle {
+  opacity: 1;
+}
+
+.board-status {
+  margin-top: 10px;
+}
+
 /* ---------------------------------------------------------- users & invites */
 
 .files__title {

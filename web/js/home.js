@@ -65,9 +65,11 @@ function applyOwnAssets() {
   if (icon) icon.href = assetUrl('logo.svg');
 }
 
-/** The site's column setting (0 = auto) and the layout pass that applies it. */
+/** The site's layout settings, and the pass that applies them. */
 let siteColumns = 0;
-const layout = () => applyGridLayout(grid, siteColumns);
+let siteLayout = 'flow';
+let siteCells = [];
+const layout = () => applyGridLayout(grid, siteColumns, { layout: siteLayout, cells: siteCells });
 
 async function boot() {
   applyOwnAssets();
@@ -76,11 +78,13 @@ async function boot() {
     const doc = await fetchSite();
     applySite(doc.site || {});
     siteColumns = Number(doc.site?.columns) || 0;
+    siteLayout = doc.site?.layout === 'board' ? 'board' : 'flow';
+    siteCells = doc.cells || [];
     grid.replaceChildren();
-    if (!doc.cells || doc.cells.length === 0) {
+    if (!siteCells.length) {
       renderEmpty();
     } else {
-      grid.append(...doc.cells.map(createCell));
+      grid.append(...siteCells.map(createCell));
     }
     layout();
   } catch (err) {

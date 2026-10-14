@@ -4,14 +4,21 @@ import {
   DIRECTIONS,
   RATIOS,
   applyGridLayout,
+  cellUnits,
   createCell,
   currentUserid,
   defaultCell,
   defaultOverlay,
+  firstFreeSpot,
   newId,
+  packBoard,
+  rectFree,
+  rectOf,
+  repairBoard,
   toast,
   withUserid,
 } from './shared.js';
+import { createBoard } from './board.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -23,7 +30,6 @@ const state = {
   doc: { site: {}, cells: [] },
   editingId: null,
   dirty: false,
-  dragId: null,
 };
 
 /* --------------------------------------------------------------------- api */
@@ -103,6 +109,10 @@ function absorbDoc(doc) {
 
 function renderSite() {
   const site = state.doc.site || {};
+  // '自动' only means something to the flow layout
+  const auto = $('site-columns').querySelector('option[value="0"]');
+  auto.disabled = isBoard();
+  auto.textContent = isBoard() ? '自动（棋盘布局用不了）' : '自动（按窗口宽度铺满）';
   for (const input of document.querySelectorAll('[data-site]')) {
     const key = input.dataset.site;
     if (input.type === 'checkbox') input.checked = site[key] === true;
@@ -124,82 +134,68 @@ function bindSitePanel() {
       state.doc.site = state.doc.site || {};
       state.doc.site[key] = isToggle ? input.checked : input.value;
       if (key === 'accent') document.documentElement.style.setProperty('--accent', input.value);
-      if (key === 'columns' && state.editingId) renderPreview();
+      if (key === 'columns') {
+        if (isBoard()) {
+          state.doc.cells = repairBoard(state.doc.cells, boardCols());
+          renderBoard();
+        }
+        if (state.editingId) renderPreview();
+      }
       markDirty();
     });
   }
 }
 
-/* --------------------------------------------------------------- cell list */
+/* --------------------------------------------------------------- the board */
 
-const list = $('list');
+const boardEl = $('board');
 
-function slotFor(cell) {
-  const size = SIZES[cell.size] || SIZES['1x1'];
-  const slot = document.createElement('div');
-  slot.className = `slot w${size.w} h${size.h}`;
-  slot.dataset.id = cell.id;
-  slot.draggable = true;
+const board = createBoard({
+  root: boardEl,
+  onEdit: (id) => openDrawer(id),
+  onDuplicate: (id) => duplicateCell(id),
+  onRemove: (id) => removeCell(id),
+  onSelect: (id) => openDrawer(id),
+  // a move or a resize has already patched its own slot, so there is nothing to
+  // re-render here — just remember that the document is unsaved
+  onChange: () => markDirty(),
+});
 
-  const node = createCell(cell);
-  node.querySelectorAll('img').forEach((img) => (img.draggable = false));
-  slot.append(node);
+/** A board is a fixed layout, so it needs a real column count. */
+const boardCols = () => Math.min(12, Math.max(3, Number(state.doc.site?.columns) || 12));
+const isBoard = () => state.doc.site?.layout === 'board';
 
-  const bar = document.createElement('div');
-  bar.className = 'slot__bar';
-  const actions = [
-    ['grab', '⠿', '拖动排序', 'slot__btn--grab'],
-    ['edit', '✎', '编辑', ''],
-    ['dup', '⧉', '复制', ''],
-    ['up', '↑', '前移', ''],
-    ['down', '↓', '后移', ''],
-    ['del', '✕', '删除', 'slot__btn--danger'],
-  ];
-  for (const [act, glyph, title, extra] of actions) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `slot__btn ${extra}`.trim();
-    button.dataset.act = act;
-    button.title = title;
-    button.setAttribute('aria-label', title);
-    button.textContent = glyph;
-    bar.append(button);
-  }
-  slot.append(bar);
-  return slot;
-}
+/** What to draw: the stored positions, or how CSS would pack the flow today. */
+const boardCells = () => (isBoard() ? state.doc.cells : packBoard(state.doc.cells, boardCols()));
 
-function renderList() {
-  list.replaceChildren();
-  for (const cell of state.doc.cells) list.append(slotFor(cell));
-  const count = state.doc.cells.length;
-  $('cell-count').textContent = count ? `共 ${count} 个格子` : '还没有格子';
-  if (!count) {
-    const empty = document.createElement('div');
-    empty.className = 'grid-state';
-    empty.style.gridColumn = '1 / -1';
-    empty.textContent = '点击右上角「＋ 添加格子」开始布置你的橱窗。';
-    list.append(empty);
-  }
-}
-
-function refreshSlot(id) {
-  const slot = list.querySelector(`.slot[data-id="${CSS.escape(id)}"]`);
-  const cell = state.doc.cells.find((item) => item.id === id);
-  if (!slot || !cell) return;
-  const replacement = slotFor(cell);
-  replacement.classList.add('is-refreshed');
-  slot.replaceWith(replacement);
-}
-
-function moveCell(id, delta) {
-  const index = state.doc.cells.findIndex((cell) => cell.id === id);
-  const target = index + delta;
-  if (index < 0 || target < 0 || target >= state.doc.cells.length) return;
-  const [cell] = state.doc.cells.splice(index, 1);
-  state.doc.cells.splice(target, 0, cell);
+/** The first board edit turns a flow document into a positioned one. */
+function toBoard() {
+  if (isBoard()) return;
+  const cols = boardCols();
+  state.doc.cells = packBoard(state.doc.cells, cols);
+  state.doc.site = { ...(state.doc.site || {}), layout: 'board', columns: cols };
   markDirty();
-  renderList();
+}
+
+function renderBoard() {
+  const cells = boardCells();
+  board.render(cells, { columns: boardCols(), selectedId: state.editingId });
+  applyGridLayout(boardEl, boardCols(), { layout: 'board', cells, minCell: 56 });
+  $('board-status').textContent = isBoard() ? '' : '现在是自动排布：在棋盘上动一下，就会按现在这个样子固定下来。';
+  renderCount();
+}
+
+function renderCount() {
+  const count = state.doc.cells.length;
+  $('cell-count').textContent = count ? `共 ${count} 个格子` : '还没有格子，在下面空白处拖一个出来';
+}
+
+function addCellAtFreeSpot(cell) {
+  toBoard();
+  state.doc.cells.push(cell);
+  markDirty();
+  renderBoard();
+  openDrawer(cell.id);
 }
 
 function removeCell(id) {
@@ -209,93 +205,48 @@ function removeCell(id) {
   state.doc.cells.splice(index, 1);
   if (state.editingId === id) closeDrawer();
   markDirty();
-  renderList();
+  renderBoard();
 }
 
 function duplicateCell(id) {
   const index = state.doc.cells.findIndex((cell) => cell.id === id);
   if (index < 0) return;
-  const copy = structuredClone(state.doc.cells[index]);
+  toBoard();
+  const source = state.doc.cells[index];
+  const copy = structuredClone(source);
   copy.id = newId();
+  const { w, h } = cellUnits(source);
+  const rects = state.doc.cells.map(rectOf).filter(Boolean);
+  copy.pos = firstFreeSpot(rects, boardCols(), w, h);
   state.doc.cells.splice(index + 1, 0, copy);
   markDirty();
-  renderList();
+  renderBoard();
+  toast('已复制到空位', 'ok');
 }
 
-function bindList() {
-  list.addEventListener('click', (event) => {
-    const button = event.target.closest('.slot__btn');
-    if (!button) {
-      if (event.target.closest('.slot__bar')) return;
-      const slot = event.target.closest('.slot');
-      if (slot) openDrawer(slot.dataset.id); // clicking the cell itself opens the editor
-      return;
-    }
-    const id = button.closest('.slot').dataset.id;
-    switch (button.dataset.act) {
-      case 'edit':
-        openDrawer(id);
-        break;
-      case 'dup':
-        duplicateCell(id);
-        break;
-      case 'up':
-        moveCell(id, -1);
-        break;
-      case 'down':
-        moveCell(id, 1);
-        break;
-      case 'del':
-        removeCell(id);
-        break;
-      default:
-        break;
-    }
+function bindBoard() {
+  board.setStatus($('board-status'));
+  board.bind({
+    // a drop or a resize: make sure the document is a board, then store the rect
+    onPlace: (id, rect) => {
+      toBoard();
+      const cell = state.doc.cells.find((item) => item.id === id);
+      if (!cell) return;
+      cell.pos = { ...rect };
+      board.patch(cell);
+    },
+    onDraw: (rect) => {
+      toBoard();
+      const cell = defaultCell({ size: '1x1', pos: { ...rect } });
+      state.doc.cells.push(cell);
+      markDirty();
+      renderBoard();
+      openDrawer(cell.id);
+      board.select(cell.id);
+    },
   });
-
-  // Reorder by dragging a cell; the DOM order becomes the data order.
-  list.addEventListener('dragstart', (event) => {
-    const slot = event.target.closest('.slot');
-    if (!slot) return;
-    state.dragId = slot.dataset.id;
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', state.dragId);
-    requestAnimationFrame(() => slot.classList.add('is-dragging'));
-  });
-
-  list.addEventListener('dragover', (event) => {
-    if (!state.dragId) return;
-    const dragged = list.querySelector(`.slot[data-id="${CSS.escape(state.dragId)}"]`);
-    const target = event.target.closest('.slot');
-    if (!dragged || !target || target === dragged) return;
-    event.preventDefault();
-    const rect = target.getBoundingClientRect();
-    const isAfter = event.clientX - rect.left > rect.width / 2;
-    target.parentNode.insertBefore(dragged, isAfter ? target.nextSibling : target);
-  });
-
-  list.addEventListener('dragend', () => {
-    const dragged = list.querySelector('.slot.is-dragging');
-    if (dragged) dragged.classList.remove('is-dragging');
-    commitDragOrder();
-  });
-
-  list.addEventListener('drop', (event) => {
-    event.preventDefault();
-    commitDragOrder();
-  });
-}
-
-function commitDragOrder() {
-  if (!state.dragId) return;
-  const order = [...list.querySelectorAll('.slot')].map((slot) => slot.dataset.id);
-  const map = new Map(state.doc.cells.map((cell) => [cell.id, cell]));
-  const reordered = order.map((id) => map.get(id)).filter(Boolean);
-  const changed = reordered.some((cell, index) => cell.id !== state.doc.cells[index]?.id);
-  state.dragId = null;
-  if (!changed) return;
-  state.doc.cells = reordered;
-  markDirty();
+  boardEl.tabIndex = 0;
+  boardEl.addEventListener('keydown', board.onKeyDown);
 }
 
 /* ------------------------------------------------------------------ editor */
@@ -329,6 +280,10 @@ const els = {
   ovFgText: $('ed-ov-fg-text'),
   link: $('ed-link'),
   sizes: $('ed-sizes'),
+  posX: $('ed-pos-x'),
+  posY: $('ed-pos-y'),
+  posW: $('ed-pos-w'),
+  posH: $('ed-pos-h'),
 };
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
@@ -374,7 +329,14 @@ function buildSizeOptions() {
     button.addEventListener('click', () => {
       const cell = currentCell();
       if (!cell) return;
-      cell.size = key;
+      cell.size = key; // the flow layout's size, kept in step for the fallback
+      if (isBoard()) {
+        const others = state.doc.cells.filter((item) => item.id !== cell.id).map(rectOf).filter(Boolean);
+        const current = cell.pos || { x: 0, y: 0 };
+        const wanted = { x: current.x, y: current.y, w: Math.min(size.w, boardCols()), h: size.h };
+        const fits = wanted.x + wanted.w <= boardCols() && rectFree(others, wanted);
+        cell.pos = fits ? wanted : firstFreeSpot(others, boardCols(), size.w, size.h);
+      }
       syncSizeButtons();
       onEdited();
     });
@@ -384,8 +346,15 @@ function buildSizeOptions() {
 
 function syncSizeButtons() {
   const cell = currentCell();
+  const units = cell ? cellUnits(cell) : null;
   for (const button of els.sizes.querySelectorAll('.size-option')) {
-    button.setAttribute('aria-pressed', String(button.dataset.size === cell?.size));
+    const size = SIZES[button.dataset.size];
+    // on a board the real size is pos.w/h — a freehand size matches no preset
+    const pressed = isBoard()
+      ? units && units.w === size.w && units.h === size.h
+      : button.dataset.size === cell?.size;
+    button.setAttribute('aria-pressed', String(Boolean(pressed)));
+    button.disabled = isBoard() && size.w > boardCols();
   }
 }
 
@@ -420,6 +389,13 @@ function fillForm(cell) {
   setColorPicker(els.ovFg, els.ovFgText, cell.overlay.textColor);
   els.link.value = cell.link;
 
+  const units = cellUnits(cell);
+  const pos = cell.pos || { x: 0, y: 0 };
+  els.posX.value = String(pos.x);
+  els.posY.value = String(pos.y);
+  els.posW.value = String(units.w);
+  els.posH.value = String(units.h);
+
   const thumbWrap = $('thumb-current');
   if (cell.image) {
     $('thumb-img').src = cell.image;
@@ -440,6 +416,8 @@ function syncTypeVisibility() {
   $('fs-solid').hidden = type !== 'solid';
   // the always-on caption sits under both an image and an embedded page
   $('fs-caption').hidden = type !== 'image' && type !== 'html';
+  // positions only mean something on a board
+  $('fs-pos').hidden = !isBoard();
 }
 
 /** Pull every field back into the cell being edited. */
@@ -466,12 +444,39 @@ function applyForm() {
     textColor: readColorPicker(els.ovFg, els.ovFgText, '#ffffff'),
   };
   cell.link = els.link.value.trim();
+
+  if (isBoard()) {
+    const wanted = {
+      x: Math.max(0, Math.round(Number(els.posX.value) || 0)),
+      y: Math.max(0, Math.round(Number(els.posY.value) || 0)),
+      w: Math.max(1, Math.round(Number(els.posW.value) || 1)),
+      h: Math.max(1, Math.round(Number(els.posH.value) || 1)),
+    };
+    const others = state.doc.cells.filter((item) => item.id !== cell.id).map(rectOf).filter(Boolean);
+    const fits =
+      wanted.x + wanted.w <= boardCols() && wanted.w <= 12 && wanted.h <= 12 && rectFree(others, wanted);
+    if (fits) {
+      cell.pos = wanted;
+    } else {
+      toast('那里放不下，位置没改（和别的格子重叠或者超出棋盘了）', 'error');
+      const pos = cell.pos || { x: 0, y: 0 };
+      const units = cellUnits(cell);
+      els.posX.value = String(pos.x);
+      els.posY.value = String(pos.y);
+      els.posW.value = String(units.w);
+      els.posH.value = String(units.h);
+    }
+  }
 }
 
 function onEdited() {
   applyForm();
   renderPreview();
-  refreshSlot(state.editingId);
+  const cell = currentCell();
+  if (cell) {
+    board.refresh(boardCells().find((item) => item.id === cell.id) || cell);
+    applyGridLayout(boardEl, boardCols(), { layout: 'board', cells: boardCells(), minCell: 56 });
+  }
   markDirty();
 }
 
@@ -480,8 +485,8 @@ function renderPreview() {
   preview.replaceChildren();
   if (!cell) return;
   preview.append(createCell(cell));
-  // the preview follows the site's column setting, so it looks like the real page
-  applyGridLayout(preview, Number(state.doc.site?.columns) || 0);
+  // the preview follows the site's layout settings, so it looks like the real page
+  applyGridLayout(preview, Number(state.doc.site?.columns) || 0, { layout: layoutMode(), cells: [cell] });
 }
 
 function openDrawer(id) {
@@ -1109,7 +1114,7 @@ async function save() {
     state.dirty = false;
     $('dirty-flag').hidden = true;
     renderSite();
-    renderList();
+    renderBoard();
     if (state.editingId) renderPreview();
     refreshFilesIfVisible();
     toast('已保存', 'ok');
@@ -1139,8 +1144,10 @@ async function importJson(file) {
     const parsed = JSON.parse(await file.text());
     if (!parsed || !Array.isArray(parsed.cells)) throw new Error('文件格式不正确：缺少 cells 数组');
     state.doc = { site: parsed.site || {}, cells: parsed.cells };
+    // the server will repair this on save; do the same here so the board shows it
+    if (state.doc.site.layout === 'board') state.doc.cells = repairBoard(state.doc.cells, boardCols());
     renderSite();
-    renderList();
+    renderBoard();
     markDirty();
     toast('已导入，别忘了点击保存', 'ok');
   } catch (err) {
@@ -1152,11 +1159,14 @@ async function importJson(file) {
 
 function bindToolbar() {
   $('btn-add').addEventListener('click', () => {
-    const cell = defaultCell({ overlay: defaultOverlay() });
+    toBoard();
+    const rects = state.doc.cells.map(rectOf).filter(Boolean);
+    const cell = defaultCell({ overlay: defaultOverlay(), pos: firstFreeSpot(rects, boardCols(), 1, 1) });
     state.doc.cells.push(cell);
     markDirty();
-    renderList();
+    renderBoard();
     openDrawer(cell.id);
+    board.select(cell.id);
     drawer.querySelector('.drawer__body').scrollTop = 0;
   });
   $('btn-save').addEventListener('click', save);
@@ -1206,7 +1216,7 @@ async function start() {
   $('dirty-flag').hidden = true;
   showApp();
   renderSite();
-  renderList();
+  renderBoard();
   refreshFilesIfVisible();
   loadPeople();
 }
@@ -1214,7 +1224,7 @@ async function start() {
 async function boot() {
   bindLogin();
   bindToolbar();
-  bindList();
+  bindBoard();
   bindEditor();
   bindSitePanel();
   bindFiles();

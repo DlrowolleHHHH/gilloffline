@@ -39,16 +39,35 @@ const SEED_ASSETS_DIR = path.join(ROOT, 'assets');
 /* ------------------------------------------------------------------ limits */
 
 const SIZES = ['1x1', '2x2', '3x3', '4x4', '1x2', '1x4', '2x4', '3x6', '4x8'];
+/** The units each named size spans — mirrors `SIZES` in web/js/shared.js. */
+const SIZE_UNITS = {
+  '1x1': { w: 1, h: 1 },
+  '2x2': { w: 2, h: 2 },
+  '3x3': { w: 3, h: 3 },
+  '4x4': { w: 4, h: 4 },
+  '1x2': { w: 2, h: 1 },
+  '1x4': { w: 4, h: 1 },
+  '2x4': { w: 4, h: 2 },
+  '3x6': { w: 6, h: 3 },
+  '4x8': { w: 8, h: 4 },
+};
 const DIRECTIONS = ['left', 'right', 'top', 'bottom'];
 const RATIOS = ['1/1', '1/2'];
 const TYPES = ['image', 'solid', 'html'];
 const FITS = ['cover', 'contain'];
+/** 'flow' = an ordered list CSS packs; 'board' = every cell has a position. */
+const LAYOUTS = ['flow', 'board'];
 
 const MAX_CELLS = 200;
 const MAX_TITLE = 120;
 const MAX_BODY = 2000;
 const MAX_URL = 2048;
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+const MAX_COLS = 12;
+const MIN_BOARD_COLS = 3;
+const DEFAULT_BOARD_COLS = 12;
+const MAX_CELL_UNITS = 12;
+const MAX_ROWS = 200;
 
 /* -------------------------------------------------------------- sanitizing */
 
@@ -124,10 +143,32 @@ function normalizeOverlay(raw) {
   };
 }
 
-function normalizeCell(raw) {
+/**
+ * A cell's position on a board: x/y from the top-left, w/h in units. All four or
+ * nothing — a half-specified rect would place a cell somewhere nobody asked for.
+ * The width is capped by the board, the height is free-ish.
+ */
+function normalizePos(raw, cols) {
+  const src = raw && typeof raw === 'object' ? raw : null;
+  if (!src) return null;
+  const [x, y, w, h] = [src.x, src.y, src.w, src.h].map(Number);
+  if (![x, y, w, h].every(Number.isFinite)) return null;
+  const width = Math.min(Math.max(Math.round(w), 1), Math.min(cols, MAX_CELL_UNITS));
+  const height = Math.min(Math.max(Math.round(h), 1), MAX_CELL_UNITS);
+  return {
+    x: Math.min(Math.max(Math.round(x), 0), Math.max(0, cols - width)),
+    y: Math.min(Math.max(Math.round(y), 0), MAX_ROWS - height),
+    w: width,
+    h: height,
+  };
+}
+
+const sizeUnits = (cell) => SIZE_UNITS[cell.size] || SIZE_UNITS['1x1'];
+
+function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
   const src = raw && typeof raw === 'object' ? raw : {};
   const type = oneOf(src.type, TYPES, 'image');
-  return {
+  const cell = {
     id: typeof src.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(src.id) ? src.id : newId(),
     type,
     size: oneOf(src.size, SIZES, '1x1'),
@@ -147,12 +188,64 @@ function normalizeCell(raw) {
     link: safeUrl(src.link),
     overlay: normalizeOverlay(src.overlay),
   };
+
+  // Positions are kept in both layouts: a flow doc that has been on a board must
+  // not lose its arrangement when it switches back and forth.
+  const pos = normalizePos(src.pos, layout === 'board' ? columns : MAX_COLS);
+  if (pos) cell.pos = pos;
+  return cell;
+}
+
+const rectsOverlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+function firstFreeSpot(rects, cols, w, h) {
+  const width = Math.max(1, Math.min(w, cols));
+  for (let y = 0; y < MAX_ROWS; y += 1) {
+    for (let x = 0; x + width <= cols; x += 1) {
+      const rect = { x, y, w: width, h };
+      if (!rects.some((other) => rectsOverlap(other, rect))) return rect;
+    }
+  }
+  return { x: 0, y: 0, w: width, h };
+}
+
+/**
+ * Board documents arrive from the browser, from a hand-edited site.json, or
+ * from an import — and CSS grid will happily stack explicitly placed items on
+ * top of each other, so the server is the last line of defence: every cell
+ * either keeps a position that is free and inside the board, or gets moved to
+ * the first free spot. It never drops a cell, and it is deterministic.
+ */
+function resolveBoard(cells, cols) {
+  const placed = [];
+  for (const cell of cells) {
+    const units = cell.pos || { w: sizeUnits(cell).w, h: sizeUnits(cell).h };
+    const wanted = { x: cell.pos ? cell.pos.x : 0, y: cell.pos ? cell.pos.y : 0, ...units };
+    const clashes = placed.some((other) => rectsOverlap(other, wanted));
+    const outOfBounds = wanted.x + wanted.w > cols || wanted.x < 0 || wanted.y < 0;
+
+    if (cell.pos && !clashes && !outOfBounds) {
+      placed.push(cell.pos);
+      continue;
+    }
+    const spot = firstFreeSpot(placed, cols, units.w, units.h);
+    if (cell.pos) console.warn('[store] board repaired: %s moved to %d,%d', cell.id, spot.x, spot.y);
+    cell.pos = spot;
+    placed.push(spot);
+  }
+  return cells;
 }
 
 function normalizeDoc(raw) {
   const src = raw && typeof raw === 'object' ? raw : {};
   const site = src.site && typeof src.site === 'object' ? src.site : {};
-  const cells = Array.isArray(src.cells) ? src.cells.slice(0, MAX_CELLS).map(normalizeCell) : [];
+  const layout = oneOf(site.layout, LAYOUTS, 'flow');
+  let columns = safeNumber(site.columns, 0, MAX_COLS, 0);
+  // a board is a fixed layout: it needs a real column count
+  if (layout === 'board') columns = Math.min(MAX_COLS, Math.max(MIN_BOARD_COLS, columns || DEFAULT_BOARD_COLS));
+  const cells = Array.isArray(src.cells)
+    ? src.cells.slice(0, MAX_CELLS).map((cell) => normalizeCell(cell, { layout, columns }))
+    : [];
 
   // ids must stay unique or the admin UI keys collide
   const seen = new Set();
@@ -160,6 +253,8 @@ function normalizeDoc(raw) {
     if (seen.has(cell.id)) cell.id = newId();
     seen.add(cell.id);
   }
+
+  if (layout === 'board') resolveBoard(cells, columns);
 
   return {
     version: 1,
@@ -177,8 +272,12 @@ function normalizeDoc(raw) {
       icpLink: safeExternalUrl(site.icpLink),
       footerRight: clampText(site.footerRight, MAX_TITLE),
       accent: safeColor(site.accent, '#7e46b9'),
-      // 0 = fill the window with as many cells as fit; 3–12 = that many columns
-      columns: safeNumber(site.columns, 0, 12, 0),
+      // 0 = fill the window with as many cells as fit (flow only); otherwise the
+      // number of columns, which a board needs to be able to rely on
+      columns,
+      // 'flow' = an ordered list that CSS packs; 'board' = cells have positions.
+      // Absent means flow, which is what every document written before boards is.
+      layout,
     },
     cells,
   };
