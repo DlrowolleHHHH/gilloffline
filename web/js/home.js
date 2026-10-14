@@ -1,4 +1,4 @@
-import { assetUrl, createCell, currentUserid, fetchSite } from './shared.js';
+import { applyGridLayout, assetUrl, createCell, currentUserid, fetchSite } from './shared.js';
 
 const grid = document.getElementById('grid');
 
@@ -65,17 +65,24 @@ function applyOwnAssets() {
   if (icon) icon.href = assetUrl('logo.svg');
 }
 
+/** The site's column setting (0 = auto) and the layout pass that applies it. */
+let siteColumns = 0;
+const layout = () => applyGridLayout(grid, siteColumns);
+
 async function boot() {
   applyOwnAssets();
+  window.addEventListener('resize', layout);
   try {
     const doc = await fetchSite();
     applySite(doc.site || {});
+    siteColumns = Number(doc.site?.columns) || 0;
     grid.replaceChildren();
     if (!doc.cells || doc.cells.length === 0) {
       renderEmpty();
-      return;
+    } else {
+      grid.append(...doc.cells.map(createCell));
     }
-    grid.append(...doc.cells.map(createCell));
+    layout();
   } catch (err) {
     grid.replaceChildren();
     const state = document.createElement('div');

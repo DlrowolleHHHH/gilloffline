@@ -177,6 +177,8 @@ function normalizeDoc(raw) {
       icpLink: safeExternalUrl(site.icpLink),
       footerRight: clampText(site.footerRight, MAX_TITLE),
       accent: safeColor(site.accent, '#7e46b9'),
+      // 0 = fill the window with as many cells as fit; 3–12 = that many columns
+      columns: safeNumber(site.columns, 0, 12, 0),
     },
     cells,
   };

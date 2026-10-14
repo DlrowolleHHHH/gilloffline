@@ -30,6 +30,16 @@
 .h4 { grid-row: span 4; }
 
 /*
+ * A fixed column count: the cells are sized in JS (--cell-size) so they divide
+ * the width evenly and stay square, and each cell's span is capped inline at
+ * the column count. This is what the "每行列数" setting in the admin picks.
+ */
+.grid.is-fixed {
+  grid-template-columns: repeat(var(--cols, 6), var(--cell-size, var(--cell)));
+  grid-auto-rows: var(--cell-size, var(--cell));
+}
+
+/*
  * A wide cell has to shrink when the window cannot fit that many columns, or it
  * would spill out of the grid. Only the column span drops, the row span stays —
  * so the cell just gets closer to square, the same trade the 4-wide cells have

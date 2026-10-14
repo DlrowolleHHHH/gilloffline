@@ -114,6 +114,9 @@ export function createCell(cell) {
   node.className = cellClasses(cell).join(' ');
   node.dataset.id = cell.id;
   node.dataset.fit = cell.imageFit;
+  // the layout pass needs the units; the classes alone are not readable back
+  node.dataset.w = SIZES[cell.size] ? SIZES[cell.size].w : 1;
+  node.dataset.h = SIZES[cell.size] ? SIZES[cell.size].h : 1;
   applyCellStyle(node, cell);
 
   if (cell.link) {
@@ -216,6 +219,48 @@ export function withUserid(path) {
 export function assetUrl(name) {
   const userid = currentUserid();
   return userid ? `/u/${userid}/assets/${name}` : `/assets/${name}`;
+}
+
+/** Smallest a cell may get before the layout drops a column instead. */
+const MIN_CELL = 96;
+
+/**
+ * Lay out a grid of cells.
+ *
+ * `columns = 0` leaves it to CSS (auto-fill: as many cells as fit, capped at
+ * --cell). A number means the owner asked for that many columns: the cells are
+ * then sized to divide the available width evenly, so a 4-column layout really
+ * is four big cells instead of four small ones. Either way a wide cell's span
+ * is capped at the column count, so nothing can spill out of the grid — and a
+ * narrow window drops columns rather than shrinking cells into confetti.
+ */
+export function applyGridLayout(grid, columns) {
+  const style = getComputedStyle(grid);
+  const gap = Number.parseFloat(style.getPropertyValue('--gap')) || 16;
+  const cells = [...grid.querySelectorAll('.cell')];
+
+  if (!columns) {
+    grid.classList.remove('is-fixed');
+    grid.style.removeProperty('--cols');
+    grid.style.removeProperty('--cell-size');
+    for (const cell of cells) cell.style.removeProperty('grid-column');
+    return;
+  }
+
+  const width = grid.clientWidth || grid.parentElement?.clientWidth || 0;
+  if (!width) return; // hidden (a closed drawer): the next pass will size it
+
+  const fit = Math.max(1, Math.floor((width + gap) / (MIN_CELL + gap)));
+  const cols = Math.max(1, Math.min(Math.round(columns), fit));
+  const size = Math.max(MIN_CELL, (width - (cols - 1) * gap) / cols);
+
+  grid.classList.add('is-fixed');
+  grid.style.setProperty('--cols', String(cols));
+  grid.style.setProperty('--cell-size', `${size.toFixed(2)}px`);
+  for (const cell of cells) {
+    const span = Number(cell.dataset.w) || 1;
+    cell.style.gridColumn = `span ${Math.min(span, cols)}`;
+  }
 }
 
 export async function fetchSite() {

@@ -3,6 +3,7 @@ import {
   SIZE_ORDER,
   DIRECTIONS,
   RATIOS,
+  applyGridLayout,
   createCell,
   currentUserid,
   defaultCell,
@@ -123,6 +124,7 @@ function bindSitePanel() {
       state.doc.site = state.doc.site || {};
       state.doc.site[key] = isToggle ? input.checked : input.value;
       if (key === 'accent') document.documentElement.style.setProperty('--accent', input.value);
+      if (key === 'columns' && state.editingId) renderPreview();
       markDirty();
     });
   }
@@ -478,6 +480,8 @@ function renderPreview() {
   preview.replaceChildren();
   if (!cell) return;
   preview.append(createCell(cell));
+  // the preview follows the site's column setting, so it looks like the real page
+  applyGridLayout(preview, Number(state.doc.site?.columns) || 0);
 }
 
 function openDrawer(id) {
