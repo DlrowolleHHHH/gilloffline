@@ -83,6 +83,9 @@ function safeUrl(value) {
   if (/^\/(?:uploads|assets|pages)\//.test(raw)) return raw;
   // a sub-admin's own files live under /u/<userid>/…
   if (/^\/u\/[0-9a-f]{64}\/(?:uploads|assets|pages)\//.test(raw)) return raw;
+  // the site's own pages: /admin and /editor follow whoever's site they sit on,
+  // so a cell can be an entry point that works for the owner and for every user
+  if (raw === '/admin' || raw === '/editor' || raw === '/user') return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
   if (/^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i.test(raw)) return raw;
   return '';

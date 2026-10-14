@@ -89,6 +89,18 @@ export function applyCellStyle(node, cell) {
  * Build the DOM for one showcase cell. Everything is written with textContent,
  * never innerHTML, so stored values can never inject markup.
  */
+/** Pages that follow whoever's site they are on. */
+const SITE_PAGES = ['/admin', '/editor'];
+
+/**
+ * Resolve a cell's link for the page we are on: an entry point stored as
+ * `/admin` (or `/editor`) picks up the current userid, so the same cell in the
+ * seed leads the owner to /admin and a sub-admin to /admin?userid=….
+ */
+export function resolveLink(link) {
+  return SITE_PAGES.includes(link) ? withUserid(link) : link;
+}
+
 export function createCell(cell) {
   const node = document.createElement(cell.link ? 'a' : 'article');
   node.className = cellClasses(cell).join(' ');
@@ -97,7 +109,7 @@ export function createCell(cell) {
   applyCellStyle(node, cell);
 
   if (cell.link) {
-    node.href = cell.link;
+    node.href = resolveLink(cell.link);
     node.target = '_blank';
     node.rel = 'noopener noreferrer';
   }

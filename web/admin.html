@@ -319,7 +319,12 @@
           <legend>链接</legend>
           <div class="field">
             <label for="ed-link">点击后跳转（可留空）</label>
-            <input class="input" id="ed-link" type="url" spellcheck="false" placeholder="https://github.com/…" />
+            <input class="input" id="ed-link" type="text" spellcheck="false" placeholder="https://github.com/…" />
+            <p class="hint">
+              填 <code>/admin</code> 就是「管理页入口」——主页上会自动带上当前用户的 userid，
+              站主点进 /admin，子管理员点进自己的 /admin?userid=…。<code>/editor</code>（创作工具）同理，
+              <code>/user</code>（登录页）也认。
+            </p>
           </div>
         </fieldset>
       </div>
