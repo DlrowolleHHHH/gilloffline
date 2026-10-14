@@ -81,6 +81,8 @@ function safeUrl(value) {
   const raw = clampText(value, MAX_URL).trim();
   if (!raw) return '';
   if (/^\/(?:uploads|assets|pages)\//.test(raw)) return raw;
+  // a sub-admin's own files live under /u/<userid>/…
+  if (/^\/u\/[0-9a-f]{64}\/(?:uploads|assets|pages)\//.test(raw)) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
   if (/^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i.test(raw)) return raw;
   return '';
@@ -96,6 +98,7 @@ function safePageUrl(value) {
   if (!raw) return '';
   // and it has to name an actual file: /pages/.. and /pages/. do not
   if (/^\/pages\/(?!\.\.?$)[\p{L}\p{N}._-]+$/u.test(raw)) return raw;
+  if (/^\/u\/[0-9a-f]{64}\/pages\/(?!\.\.?$)[\p{L}\p{N}._-]+$/u.test(raw)) return raw;
   return /^https?:\/\//i.test(raw) ? raw : '';
 }
 
@@ -207,19 +210,29 @@ function ensureDirs() {
  * An existing directory is never touched: a file missing from it was deleted on
  * purpose, not a gap to fill back in.
  */
-function seedAssets() {
-  if (fs.existsSync(ASSETS_DIR)) return;
+function seedAssetsInto(dir) {
+  if (fs.existsSync(dir)) return;
   let bundled = [];
   try {
     bundled = fs.readdirSync(SEED_ASSETS_DIR).filter((name) => !name.startsWith('.'));
   } catch {
     bundled = []; // trimmed checkout: nothing to seed
   }
-  fs.mkdirSync(ASSETS_DIR, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true });
   for (const name of bundled) {
-    fs.copyFileSync(path.join(SEED_ASSETS_DIR, name), path.join(ASSETS_DIR, name));
+    fs.copyFileSync(path.join(SEED_ASSETS_DIR, name), path.join(dir, name));
   }
-  if (bundled.length) console.log('[store] seeded %d bundled file(s) into %s', bundled.length, ASSETS_DIR);
+  if (bundled.length) console.log('[store] seeded %d bundled file(s) into %s', bundled.length, dir);
+}
+
+const seedAssets = () => seedAssetsInto(ASSETS_DIR);
+
+/** Atomic JSON write: temp file next to the target, then rename over it. */
+function writeJsonAtomic(file, value) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+  fs.renameSync(tmp, file);
 }
 
 function seedIfMissing() {
@@ -268,6 +281,7 @@ function write(rawDoc) {
 module.exports = {
   ROOT,
   DATA_DIR,
+  SEED_DIR,
   UPLOAD_DIR,
   PAGES_DIR,
   ASSETS_DIR,
@@ -283,6 +297,8 @@ module.exports = {
   newId,
   ensureDirs,
   seedIfMissing,
+  seedAssetsInto,
+  writeJsonAtomic,
   read,
   write,
 };

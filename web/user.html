@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>登录 / 注册 · Gill Offline</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/logo.svg" />
+    <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/user.css" />
+  </head>
+  <body>
+    <header class="site-header wrap">
+      <div class="brand">
+        <img class="brand__title" src="/assets/title.png" alt="Gill Offline" />
+        <span class="hint">登录 / 注册</span>
+      </div>
+      <div class="row">
+        <a class="btn btn--ghost" href="/">回主页</a>
+      </div>
+    </header>
+
+    <main class="wrap user-wrap">
+      <!-- 已经登录的人看这块 -->
+      <section class="auth-card" id="welcome-card" hidden>
+        <img class="auth-card__logo" src="/assets/logo.svg" alt="" />
+        <h1 id="welcome-title">已经登录</h1>
+        <p class="hint" id="welcome-note"></p>
+        <div class="row row--center">
+          <a class="btn btn--primary" id="welcome-enter" href="/">进入我的橱窗</a>
+          <button class="btn" id="welcome-logout" type="button">退出登录</button>
+        </div>
+      </section>
+
+      <!-- 没登录：登录 / 注册 -->
+      <section class="auth-card" id="auth-card">
+        <img class="auth-card__logo" src="/assets/logo.svg" alt="" />
+        <div class="auth-tabs">
+          <button type="button" data-tab="login" aria-selected="true">登录</button>
+          <button type="button" data-tab="register" aria-selected="false">注册</button>
+        </div>
+
+        <form class="auth-form" id="login-form">
+          <div class="field">
+            <label for="login-username">用户名</label>
+            <input class="input" id="login-username" autocomplete="username" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label for="login-password">密码</label>
+            <input class="input" id="login-password" type="password" autocomplete="current-password" />
+          </div>
+          <button class="btn btn--primary" id="login-submit" type="submit">登录</button>
+          <p class="hint auth-error" id="login-error" hidden></p>
+        </form>
+
+        <form class="auth-form" id="register-form" hidden>
+          <div class="field">
+            <label for="reg-username">用户名</label>
+            <input
+              class="input"
+              id="reg-username"
+              autocomplete="username"
+              spellcheck="false"
+              placeholder="2–24 个字，中英文、数字、_ 和 - 都行"
+            />
+          </div>
+          <div class="field">
+            <label for="reg-password">密码</label>
+            <input
+              class="input"
+              id="reg-password"
+              type="password"
+              autocomplete="new-password"
+              placeholder="至少 6 位"
+            />
+          </div>
+          <div class="field">
+            <label for="reg-invite">邀请码</label>
+            <input class="input" id="reg-invite" spellcheck="false" placeholder="32 位十六进制，找站主要" />
+          </div>
+          <button class="btn btn--primary" id="reg-submit" type="submit">注册并进入</button>
+          <p class="hint auth-error" id="reg-error" hidden></p>
+        </form>
+
+        <p class="hint auth-note">
+          注册需要邀请码（由站主生成，有使用次数限制）。注册成功会自动登录，
+          然后进入你自己的橱窗：主页、管理页和创作工具都只在你的数据里操作，和别人的互不影响。
+        </p>
+      </section>
+    </main>
+
+    <script type="module" src="/js/user.js"></script>
+  </body>
+</html>

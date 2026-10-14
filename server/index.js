@@ -14,6 +14,7 @@ const path = require('path');
 
 const store = require('./store');
 const api = require('./api');
+const users = require('./users');
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -100,9 +101,21 @@ function serveFrom(res, base, urlPath, cache) {
   return send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });
 }
 
+/** /u/<userid>/<assets|uploads|pages>/<file> — a sub-admin's own files. */
+const USER_FILE_RE = /^\/u\/([0-9a-f]{64})\/(assets|uploads|pages)\/(.+)$/;
+
+function serveUserFile(res, pathname) {
+  const match = USER_FILE_RE.exec(pathname);
+  const notFound = () => send(res, 404, 'Not found', { 'Content-Type': 'text/plain; charset=utf-8' });
+  if (!match || !users.exists(match[1])) return notFound();
+  const [, userid, kind, name] = match;
+  return serveFrom(res, users.kindDir(userid, kind), `/${name}`, 'no-cache');
+}
+
 function serveStatic(res, pathname) {
-  // the pretty URLs, neither of which is linked from the showcase page
-  let rel = { '/admin': '/admin.html', '/editor': '/editor.html' }[pathname] || pathname;
+  // pretty URLs; the showcase page links to none of them
+  let rel =
+    { '/admin': '/admin.html', '/editor': '/editor.html', '/user': '/user.html' }[pathname] || pathname;
   if (rel.endsWith('/')) rel += 'index.html';
 
   const target = resolveInside(WEB_DIR, rel);
@@ -126,6 +139,7 @@ const server = http.createServer((req, res) => {
         const url = new URL(req.url, 'http://localhost');
         return api.handle(req, res, url);
       }
+      if (pathname.startsWith('/u/')) return serveUserFile(res, pathname);
       for (const [prefix, dir] of DATA_MOUNTS) {
         if (pathname.startsWith(prefix)) {
           return serveFrom(res, dir(), pathname.slice(prefix.length - 1), 'no-cache');

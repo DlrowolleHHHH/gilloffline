@@ -28,13 +28,14 @@ COPY data/site.json /app/seed/site.json
 COPY docker/nginx.http.conf.template docker/nginx.https.conf.template /etc/gilloffline/
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh \
-  && mkdir -p /app/data /run/nginx /var/www/acme /app/ssl \
-  && chown -R node:node /app/data
+  && mkdir -p /app/data /app/users /run/nginx /var/www/acme /app/ssl \
+  && chown -R node:node /app/data /app/users
 
 ENV NODE_ENV=production \
     PORT=3000 \
     HOST=127.0.0.1 \
     DATA_DIR=/app/data \
+    USERS_DIR=/app/users \
     SEED_DIR=/app/seed
 
 # Everything the site serves or edits at runtime lives here: site.json, the
@@ -42,6 +43,10 @@ ENV NODE_ENV=production \
 # (pages/). Mount a host directory here to keep it across upgrades — the host
 # path is /app/data too, same idea as /app/ssl.
 VOLUME ["/app/data"]
+
+# One directory per sub-admin (site.json + assets/ + uploads/ + pages/), served
+# under /u/<userid>/…. Same deal: mount the host's /app/users here.
+VOLUME ["/app/users"]
 
 EXPOSE 80 443
 

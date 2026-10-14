@@ -176,8 +176,30 @@ export function createCell(cell) {
   return node;
 }
 
+/**
+ * Whose page are we on? `?userid=…` for a sub-admin's site, empty for the
+ * owner's own. Every page that talks to the API carries it along, which is what
+ * keeps the two kinds of site apart.
+ */
+export function currentUserid() {
+  return new URLSearchParams(location.search).get('userid') || '';
+}
+
+/** Add the current userid to an API path, when there is one. */
+export function withUserid(path) {
+  const userid = currentUserid();
+  if (!userid) return path;
+  return `${path}${path.includes('?') ? '&' : '?'}userid=${encodeURIComponent(userid)}`;
+}
+
+/** A bundled site image (logo.svg, title.png) belonging to whoever owns the page. */
+export function assetUrl(name) {
+  const userid = currentUserid();
+  return userid ? `/u/${userid}/assets/${name}` : `/assets/${name}`;
+}
+
 export async function fetchSite() {
-  const res = await fetch('/api/site', { headers: { Accept: 'application/json' } });
+  const res = await fetch(withUserid('/api/site'), { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`加载失败（${res.status}）`);
   return res.json();
 }

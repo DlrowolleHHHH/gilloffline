@@ -65,28 +65,35 @@ function sign(payload) {
   return `${data}.${mac}`;
 }
 
+/** Returns the signed payload, or null when the token is missing/forged/expired. */
 function verify(token) {
-  if (typeof token !== 'string' || token.length > 4096) return false;
+  if (typeof token !== 'string' || token.length > 4096) return null;
   const dot = token.lastIndexOf('.');
-  if (dot <= 0) return false;
+  if (dot <= 0) return null;
   const data = token.slice(0, dot);
   const mac = token.slice(dot + 1);
 
   const expected = crypto.createHmac('sha256', SECRET).update(data).digest('base64url');
   const a = Buffer.from(mac);
   const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
 
   try {
     const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-    return typeof payload.exp === 'number' && payload.exp > Date.now();
+    if (typeof payload.exp !== 'number' || payload.exp <= Date.now()) return null;
+    if (typeof payload.sub !== 'string' || !payload.sub) return null;
+    return payload;
   } catch {
-    return false;
+    return null;
   }
 }
 
-function issueToken() {
-  return sign({ exp: Date.now() + SESSION_TTL_MS });
+/**
+ * `sub` is who the session belongs to: `'admin'` for the site owner, otherwise
+ * the userid of a sub-admin.
+ */
+function issueToken(sub = 'admin') {
+  return sign({ sub, exp: Date.now() + SESSION_TTL_MS });
 }
 
 /* -------------------------------------------------------------- rate limit */
@@ -154,9 +161,21 @@ function clearCookie() {
   return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
 }
 
-function isAuthenticated(req) {
+/** `'admin'`, a userid, or null when nobody is logged in. */
+function sessionSubject(req) {
   const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
-  return verify(token);
+  const payload = verify(token);
+  return payload ? payload.sub : null;
+}
+
+const isAuthenticated = (req) => sessionSubject(req) !== null;
+
+/** Can this session edit the site that belongs to `owner` (null = the owner's)? */
+function canEdit(req, owner) {
+  const subject = sessionSubject(req);
+  if (subject === null) return false;
+  if (subject === 'admin') return true;
+  return owner !== null && subject === owner;
 }
 
 module.exports = {
@@ -166,7 +185,9 @@ module.exports = {
   issueToken,
   sessionCookie,
   clearCookie,
+  sessionSubject,
   isAuthenticated,
+  canEdit,
   parseCookies,
   tooManyFailures,
   recordFailure,

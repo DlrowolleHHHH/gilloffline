@@ -20,8 +20,8 @@
         <span class="dirty-flag" id="dirty-flag" hidden>未保存</span>
         <button class="btn btn--primary" id="btn-add" type="button">＋ 添加格子</button>
         <button class="btn" id="btn-save" type="button">保存</button>
-        <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">预览主页</a>
-        <a class="btn btn--ghost" href="/editor">创作工具</a>
+        <a class="btn btn--ghost" id="link-preview" href="/" target="_blank" rel="noopener">预览主页</a>
+        <a class="btn btn--ghost" id="link-editor" href="/editor">创作工具</a>
         <button class="btn btn--ghost" id="btn-export" type="button">导出</button>
         <button class="btn btn--ghost" id="btn-import" type="button">导入</button>
         <button class="btn btn--ghost" id="btn-logout" type="button">退出</button>
@@ -36,6 +36,15 @@
         <h1>管理页</h1>
         <p class="hint" id="login-hint">请输入部署时通过环境变量配置的管理密码。</p>
         <form id="login-form">
+          <input
+            class="input"
+            id="login-username"
+            type="text"
+            autocomplete="username"
+            placeholder="用户名"
+            spellcheck="false"
+            hidden
+          />
           <input
             class="input"
             id="login-password"
@@ -109,6 +118,36 @@
               <input type="file" id="file-input" hidden />
             </div>
             <ul class="file-list" id="file-list"></ul>
+          </div>
+        </details>
+
+        <details class="panel" id="people-panel">
+          <summary>用户与邀请码</summary>
+          <div class="files">
+            <h2 class="files__title">邀请码</h2>
+            <p class="hint">
+              注册需要邀请码，每个码有使用次数上限。生成后发给对方，用完就失效；
+              用完了可以删掉，也可以再生成新的。
+            </p>
+            <div class="row">
+              <label class="hint" for="invite-uses">可用次数</label>
+              <input class="input input--slim" id="invite-uses" type="number" min="1" max="1000" value="10" />
+              <input class="input input--slim input--grow" id="invite-note" type="text" placeholder="备注（给谁用的，可留空）" />
+              <button class="btn btn--primary" id="invite-add" type="button">生成邀请码</button>
+            </div>
+            <ul class="file-list" id="invite-list"></ul>
+
+            <h2 class="files__title">用户</h2>
+            <p class="hint">
+              每个用户有自己的数据目录，互相隔离；站主也可以帮他们改页面。
+              删除用户时，他的目录会先移到 <code>users/.deleted/</code> 归档，再删账号。
+            </p>
+            <div class="row">
+              <input class="input input--slim" id="user-name" type="text" placeholder="用户名" spellcheck="false" />
+              <input class="input input--slim input--grow" id="user-pass" type="password" placeholder="初始密码（至少 6 位）" />
+              <button class="btn" id="user-add" type="button">直接添加用户</button>
+            </div>
+            <ul class="file-list" id="user-list"></ul>
           </div>
         </details>
 

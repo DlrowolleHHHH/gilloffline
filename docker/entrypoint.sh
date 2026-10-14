@@ -5,17 +5,19 @@
 set -e
 
 DATA_DIR="${DATA_DIR:-/app/data}"
+USERS_DIR="${USERS_DIR:-/app/users}"
 SSL_DIR="${SSL_DIR:-/app/ssl}"
 SERVER_NAME="${SERVER_NAME:-_}"
 SSL_CERT_FILE="${SSL_CERT_FILE:-gilloffline.online.pem}"
 SSL_KEY_FILE="${SSL_KEY_FILE:-gilloffline.online.key}"
 TEMPLATE_DIR=/etc/gilloffline
 
-mkdir -p "$DATA_DIR" /run/nginx /var/log/nginx /var/www/acme
+mkdir -p "$DATA_DIR" "$USERS_DIR" /run/nginx /var/log/nginx /var/www/acme
 
-# The data directory is a mounted volume; make sure the app user can write to it.
+# The data and users directories are mounted volumes; make sure the app user can
+# write to them.
 if [ "$(id -u)" = "0" ]; then
-  chown -R node:node "$DATA_DIR" 2>/dev/null || true
+  chown -R node:node "$DATA_DIR" "$USERS_DIR" 2>/dev/null || true
 fi
 
 # First run on an empty volume: drop in the bundled example content.

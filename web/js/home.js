@@ -1,4 +1,4 @@
-import { createCell, fetchSite } from './shared.js';
+import { assetUrl, createCell, currentUserid, fetchSite } from './shared.js';
 
 const grid = document.getElementById('grid');
 
@@ -9,7 +9,7 @@ function renderEmpty() {
 
   const logo = document.createElement('img');
   logo.className = 'grid-state__logo';
-  logo.src = '/assets/logo.svg';
+  logo.src = assetUrl('logo.svg');
   logo.alt = '';
 
   const text = document.createElement('p');
@@ -56,7 +56,17 @@ function applySite(site) {
   document.getElementById('footer-right').textContent = site.footerRight || '';
 }
 
+/** On a sub-admin's page the chrome shows their own images, not the owner's. */
+function applyOwnAssets() {
+  if (!currentUserid()) return;
+  document.querySelector('.brand__title').src = assetUrl('title.png');
+  document.querySelector('.site-footer__logo').src = assetUrl('logo.svg');
+  const icon = document.querySelector('link[rel="icon"]');
+  if (icon) icon.href = assetUrl('logo.svg');
+}
+
 async function boot() {
+  applyOwnAssets();
   try {
     const doc = await fetchSite();
     applySite(doc.site || {});

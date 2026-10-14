@@ -17,8 +17,8 @@
       </div>
       <div class="row">
         <span class="hint" id="session-state"></span>
-        <a class="btn btn--ghost" href="/admin">管理页</a>
-        <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">预览主页</a>
+        <a class="btn btn--ghost" id="link-admin" href="/admin">管理页</a>
+        <a class="btn btn--ghost" id="link-home" href="/" target="_blank" rel="noopener">预览主页</a>
       </div>
     </header>
 
@@ -244,6 +244,7 @@
     <div class="modal" id="login-modal" hidden>
       <h2>登录后才能存到服务器</h2>
       <p class="hint" id="login-hint">用部署时设置的 ADMIN_PASSWORD 登录，和管理页同一个密码。</p>
+      <input class="input" id="login-username" type="text" autocomplete="username" placeholder="用户名" spellcheck="false" hidden />
       <input class="input" id="login-password" type="password" autocomplete="current-password" placeholder="管理密码" />
       <div class="row row--end">
         <button class="btn btn--ghost" id="login-cancel" type="button">取消</button>

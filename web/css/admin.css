@@ -225,6 +225,35 @@
   text-align: center;
 }
 
+/* ---------------------------------------------------------- users & invites */
+
+.files__title {
+  margin: 18px 0 2px;
+  font-size: 14px;
+}
+
+.files__title:first-child {
+  margin-top: 0;
+}
+
+.input--slim {
+  width: auto;
+  padding: 7px 9px;
+  font-size: 12.5px;
+}
+
+/* the one field in a row that should take the leftover width */
+.input--grow {
+  flex: 1 1 12rem;
+  width: auto;
+}
+
+.file-row__code {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+}
+
 /* --------------------------------------------------------------- edit grid */
 
 .admin-grid {

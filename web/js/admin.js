@@ -4,13 +4,19 @@ import {
   DIRECTIONS,
   RATIOS,
   createCell,
+  currentUserid,
   defaultCell,
   defaultOverlay,
   newId,
   toast,
+  withUserid,
 } from './shared.js';
 
 const $ = (id) => document.getElementById(id);
+
+/** Whose page this is: a sub-admin when ?userid=… is present, else the owner's. */
+const userid = currentUserid();
+const isOwnerPage = userid === '';
 
 const state = {
   doc: { site: {}, cells: [] },
@@ -48,12 +54,17 @@ function showLogin(message) {
   loginView.hidden = false;
   appView.hidden = true;
   topbar.hidden = true;
+  // a sub-admin's page wants a username; the owner's page only a password
+  $('login-username').hidden = isOwnerPage;
+  $('login-hint').textContent = isOwnerPage
+    ? '请输入部署时通过环境变量配置的管理密码。'
+    : '用注册时的用户名和密码登录。站主在这个页面输密码可以直接代管。';
   if (message) {
     const error = $('login-error');
     error.textContent = message;
     error.hidden = false;
   }
-  $('login-password').focus();
+  $(isOwnerPage ? 'login-password' : 'login-username').focus();
 }
 
 function showApp() {
@@ -62,6 +73,10 @@ function showApp() {
   topbar.hidden = false;
   $('login-error').hidden = true;
   $('login-password').value = '';
+  // managing people is the owner's job, and only from the owner's own page
+  $('people-panel').hidden = !isOwnerPage;
+  $('link-preview').href = withUserid('/');
+  $('link-editor').href = withUserid('/editor');
 }
 
 /* --------------------------------------------------------------- site meta */
@@ -618,8 +633,10 @@ const FILE_KINDS = {
 let fileKind = 'assets';
 let fileList = [];
 
+/** File API path. The userid decides whose directory it lands in — or rather,
+    the server decides from it that we are allowed anywhere near the files. */
 const filesApi = (kind, name = '') =>
-  `/api/files?kind=${encodeURIComponent(kind)}${name ? `&name=${encodeURIComponent(name)}` : ''}`;
+  withUserid(`/api/files?kind=${encodeURIComponent(kind)}${name ? `&name=${encodeURIComponent(name)}` : ''}`);
 
 function refreshFilesIfVisible() {
   if ($('files-panel').open) loadFiles();
@@ -798,6 +815,214 @@ function bindFiles() {
   });
 }
 
+/* ---------------------------------------------------------- users & invites */
+
+/** Owner-only: invites are what let people in, users are who got in. */
+
+const stampOf = (ms) => new Date(ms).toLocaleString('zh-CN', { hour12: false });
+
+function actionButton(act, glyph, title, name) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `btn btn--icon btn--ghost${act === 'del' ? ' file-row__del' : ''}`;
+  button.dataset.act = act;
+  button.dataset.name = name;
+  button.title = title;
+  button.setAttribute('aria-label', `${title} ${name}`);
+  button.textContent = glyph;
+  return button;
+}
+
+function inviteRow(invite) {
+  const row = document.createElement('li');
+  row.className = 'file-row';
+
+  const code = document.createElement('span');
+  code.className = 'file-row__name file-row__code';
+  code.textContent = invite.code;
+  code.title = invite.code;
+
+  const meta = document.createElement('span');
+  meta.className = 'file-row__meta';
+  meta.textContent = `${invite.uses} / ${invite.maxUses} 次 · ${stampOf(invite.createdAt)}${
+    invite.note ? ` · ${invite.note}` : ''
+  }`;
+
+  const spent = invite.uses >= invite.maxUses;
+  const badge = document.createElement('span');
+  badge.className = 'file-row__badge';
+  badge.textContent = spent ? '已用完' : `还能用 ${invite.maxUses - invite.uses} 次`;
+  badge.hidden = false;
+
+  const actions = document.createElement('span');
+  actions.className = 'file-row__acts';
+  actions.append(
+    actionButton('copy', '⧉', '复制邀请码', invite.code),
+    actionButton('del', '✕', '删除', invite.code)
+  );
+
+  row.append(code, meta, badge, actions);
+  return row;
+}
+
+function userRow(user) {
+  const row = document.createElement('li');
+  row.className = 'file-row';
+
+  const thumb = document.createElement('span');
+  thumb.className = 'file-row__thumb file-row__thumb--text';
+  thumb.textContent = [...user.username][0] || '?';
+
+  const name = document.createElement('span');
+  name.className = 'file-row__name';
+  name.textContent = user.username;
+
+  const meta = document.createElement('span');
+  meta.className = 'file-row__meta';
+  meta.textContent = `注册于 ${stampOf(user.createdAt)} · ${user.userid.slice(0, 8)}…`;
+
+  const actions = document.createElement('span');
+  actions.className = 'file-row__acts';
+  const visit = actionButton('visit', '↗', '看他/她的主页', user.userid);
+  const manage = actionButton('manage', '✎', '代管页面', user.userid);
+  const remove = actionButton('del', '✕', '删除用户', user.userid);
+  for (const button of [visit, manage, remove]) button.dataset.username = user.username;
+  actions.append(visit, manage, remove);
+
+  row.append(thumb, name, meta, actions);
+  return row;
+}
+
+async function loadPeople() {
+  if (!isOwnerPage) return;
+  try {
+    const [invites, people] = await Promise.all([api('/api/invites'), api('/api/users')]);
+    renderInvites(invites.invites || []);
+    renderUsers(people.users || []);
+  } catch (err) {
+    if (err.status === 401 || err.status === 403) return; // not logged in as the owner
+    toast(err.message, 'error');
+  }
+}
+
+function renderInvites(invites) {
+  const list = $('invite-list');
+  list.replaceChildren();
+  if (!invites.length) {
+    const empty = document.createElement('li');
+    empty.className = 'file-empty';
+    empty.textContent = '还没有邀请码。生成一个发给要注册的人。';
+    list.append(empty);
+    return;
+  }
+  for (const invite of invites) list.append(inviteRow(invite));
+}
+
+function renderUsers(people) {
+  const list = $('user-list');
+  list.replaceChildren();
+  if (!people.length) {
+    const empty = document.createElement('li');
+    empty.className = 'file-empty';
+    empty.textContent = '还没有用户。';
+    list.append(empty);
+    return;
+  }
+  for (const user of people) list.append(userRow(user));
+}
+
+async function createInvite() {
+  const button = $('invite-add');
+  button.disabled = true;
+  try {
+    const invite = await api('/api/invites', {
+      method: 'POST',
+      body: { maxUses: Number($('invite-uses').value) || 10, note: $('invite-note').value.trim() },
+    });
+    $('invite-note').value = '';
+    await loadPeople();
+    copyText(invite.code);
+    toast('邀请码已生成并复制', 'ok');
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function createUser() {
+  const button = $('user-add');
+  const username = $('user-name').value.trim();
+  const password = $('user-pass').value;
+  if (!username || !password) return toast('用户名和密码都要填', 'error');
+  button.disabled = true;
+  try {
+    await api('/api/users', { method: 'POST', body: { username, password } });
+    $('user-name').value = '';
+    $('user-pass').value = '';
+    await loadPeople();
+    toast(`已添加用户 ${username}`, 'ok');
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function removeUser(userid2, username) {
+  if (!confirm(`删除用户「${username}」？他的目录会先归档到 users/.deleted/，账号随即删除。`)) return;
+  try {
+    await api(`/api/users?userid=${encodeURIComponent(userid2)}`, { method: 'DELETE' });
+    await loadPeople();
+    toast(`已删除 ${username}`, 'ok');
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function removeInvite(code) {
+  if (!confirm('删除这个邀请码？已经用它注册的人不受影响。')) return;
+  try {
+    await api(`/api/invites?code=${encodeURIComponent(code)}`, { method: 'DELETE' });
+    await loadPeople();
+    toast('邀请码已删除', 'ok');
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    window.prompt('复制这段内容：', text);
+  }
+}
+
+function bindPeople() {
+  $('invite-add').addEventListener('click', createInvite);
+  $('user-add').addEventListener('click', createUser);
+
+  $('invite-list').addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-act]');
+    if (!button) return;
+    if (button.dataset.act === 'copy') {
+      copyText(button.dataset.name);
+      toast('邀请码已复制', 'ok');
+    }
+    if (button.dataset.act === 'del') removeInvite(button.dataset.name);
+  });
+
+  $('user-list').addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-act]');
+    if (!button) return;
+    const id = button.dataset.name;
+    if (button.dataset.act === 'visit') window.open(`/?userid=${id}`, '_blank', 'noopener');
+    if (button.dataset.act === 'manage') location.href = `/admin?userid=${id}`;
+    if (button.dataset.act === 'del') removeUser(id, button.dataset.username || id);
+  });
+}
+
 /* -------------------------------------------------------------- save/export */
 
 function markDirty() {
@@ -809,7 +1034,7 @@ async function save() {
   const button = $('btn-save');
   button.disabled = true;
   try {
-    const saved = await api('/api/site', { method: 'PUT', body: state.doc });
+    const saved = await api(withUserid('/api/site'), { method: 'PUT', body: state.doc });
     state.doc = absorbDoc(saved);
     state.dirty = false;
     $('dirty-flag').hidden = true;
@@ -888,7 +1113,12 @@ function bindLogin() {
     button.disabled = true;
     error.hidden = true;
     try {
-      await api('/api/login', { method: 'POST', body: { password: $('login-password').value } });
+      const username = $('login-username').value.trim();
+      // no username means the site owner; with one it is that sub-admin
+      await api('/api/login', {
+        method: 'POST',
+        body: username ? { username, password: $('login-password').value } : { password: $('login-password').value },
+      });
       await start();
     } catch (err) {
       error.textContent = err.message;
@@ -900,7 +1130,7 @@ function bindLogin() {
 }
 
 async function start() {
-  const doc = await api('/api/site');
+  const doc = await api(withUserid('/api/site'));
   state.doc = absorbDoc(doc);
   state.dirty = false;
   $('dirty-flag').hidden = true;
@@ -908,6 +1138,7 @@ async function start() {
   renderSite();
   renderList();
   refreshFilesIfVisible();
+  loadPeople();
 }
 
 async function boot() {
@@ -917,6 +1148,7 @@ async function boot() {
   bindEditor();
   bindSitePanel();
   bindFiles();
+  bindPeople();
 
   window.addEventListener('beforeunload', (event) => {
     if (!state.dirty) return undefined;
@@ -927,7 +1159,7 @@ async function boot() {
 
   try {
     const session = await api('/api/session');
-    if (!session.configured) {
+    if (!session.configured && isOwnerPage) {
       $('login-hint').textContent =
         '服务端没有配置 ADMIN_PASSWORD 环境变量，管理功能已禁用。请在部署时设置密码后重启容器。';
       $('login-submit').disabled = true;
@@ -935,11 +1167,10 @@ async function boot() {
       showLogin();
       return;
     }
-    if (session.authenticated) {
-      await start();
-    } else {
-      showLogin();
-    }
+    // the owner can open anyone's page; a sub-admin only their own
+    const mine = session.subject === 'admin' || (userid !== '' && session.subject === userid);
+    if (mine) await start();
+    else showLogin();
   } catch (err) {
     showLogin(`无法连接服务器：${err.message}`);
   }

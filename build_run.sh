@@ -45,6 +45,9 @@ HOST_ACME_DIR="${HOST_ACME_DIR:-/var/www/acme}"
 HOST_DATA_DIR="${HOST_DATA_DIR:-/app/data}"
 # 去掉结尾的斜杠：后面要拿它跟旧的仓库内目录比对，多一个斜杠就不相等了
 HOST_DATA_DIR="${HOST_DATA_DIR%/}"
+# 子管理员的数据（每人是 /app/users/<userid>/ 一整个小站）
+HOST_USERS_DIR="${HOST_USERS_DIR:-/app/users}"
+HOST_USERS_DIR="${HOST_USERS_DIR%/}"
 
 # nginx server_name — set this to your domain, e.g. SERVER_NAME=example.com
 SERVER_NAME="${SERVER_NAME:-_}"
@@ -163,6 +166,13 @@ if ! mkdir -p "$HOST_DATA_DIR" 2>/dev/null; then
   注意：macOS 的根分区是只读的，无法创建 /app，请改用其它路径。"
 fi
 
+if ! mkdir -p "$HOST_USERS_DIR" 2>/dev/null; then
+  die "无法创建用户目录 $HOST_USERS_DIR
+  请手动创建（可能需要 sudo）：sudo mkdir -p $HOST_USERS_DIR && sudo chown $(id -u):$(id -g) $HOST_USERS_DIR
+  或指定其它目录：HOST_USERS_DIR=\$HOME/gilloffline-users ./build_run.sh
+  注意：macOS 的根分区是只读的，无法创建 /app，请改用其它路径。"
+fi
+
 # 更早的版本把运行时数据放在仓库里（先是 data/，后来是 data.local/）。数据目录还是
 # 空的时候把它们搬过来：升级绝不该看起来像“内容没了”。旧目录一律原样保留，不删。
 
@@ -228,6 +238,7 @@ docker run -d \
   -v "${HOST_SSL_DIR}:/app/ssl:ro" \
   -v "${HOST_ACME_DIR}:/var/www/acme" \
   -v "${HOST_DATA_DIR}:/app/data" \
+  -v "${HOST_USERS_DIR}:/app/users" \
   "${IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
 
 ok "容器已启动"
@@ -269,6 +280,7 @@ else
   ok "主页: http://<服务器地址>:${HTTP_PORT}/    管理页: http://<服务器地址>:${HTTP_PORT}/admin"
 fi
 echo "  数据目录: ${HOST_DATA_DIR} -> /app/data"
+echo "  用户目录: ${HOST_USERS_DIR} -> /app/users"
 echo "  证书目录: ${HOST_SSL_DIR} -> /app/ssl"
 echo "  ACME 目录: ${HOST_ACME_DIR} -> /var/www/acme"
 echo "  查看日志: ./build_run.sh --logs"

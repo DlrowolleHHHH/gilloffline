@@ -1,0 +1,84 @@
+/* The login / registration page. */
+
+.user-wrap {
+  display: grid;
+  place-items: start center;
+  padding: 40px 0 70px;
+}
+
+.auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(400px, 100%);
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ink-700) 78%, transparent);
+}
+
+.auth-card__logo {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto;
+  opacity: 0.9;
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: 17px;
+  text-align: center;
+}
+
+.auth-note {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  line-height: 1.65;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--ink-800);
+}
+
+.auth-tabs button {
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+
+.auth-tabs button[aria-selected='true'] {
+  background: color-mix(in srgb, var(--accent) 26%, var(--ink-600));
+  color: var(--text);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-form .btn {
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.auth-error {
+  color: var(--danger);
+}
+
+.row--center {
+  justify-content: center;
+}

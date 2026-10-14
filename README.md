@@ -6,6 +6,7 @@
   两张图都在 `assets/` 里，页面上按 `/assets/` 访问。
   主页是纯展示的，页面上**没有任何管理入口**，只能靠直接输网址进管理页。
 - 管理页 `/admin`：密码来自部署时的环境变量 `ADMIN_PASSWORD`，登录后可编辑一切。
+- 用户页 `/user`：注册 / 登录，注册需要邀请码，进去是属于自己的小站（见「多用户」）。
 - 部署：一个容器里跑 nginx（TLS + 反向代理）+ Node 应用，证书从宿主机 `/app/ssl` 挂载进容器同一个路径。
 
 ```
@@ -122,6 +123,49 @@
 
 两个工具的产物都落在 `uploads/` 或 `assets/`，就是「文件」面板里那两块；把 `/uploads/…` 填进格子的
 图片地址就能用。
+
+## 多用户（子管理员）
+
+`/user` 是注册 / 登录页：注册要填**用户名 + 密码 + 邀请码**。注册成功自动登录，然后进入
+`/?userid=<userid>` —— 一份用默认示例内容铺好的、属于他自己的橱窗。他的管理页是
+`/admin?userid=<userid>`，创作工具是 `/editor?userid=<userid>`。
+
+**数据完全隔离**：每个用户在 `/app/users/<userid>/` 下有一份自己的小站
+
+```
+/app/users/<userid>/site.json      # 他自己的格子配置
+/app/users/<userid>/assets/        # 他自己的 logo.svg / title.png（首启从仓库播种，可替换）
+/app/users/<userid>/uploads/       # 他自己上传的图片
+/app/users/<userid>/pages/         # 他自己嵌入的 HTML 页面
+```
+
+页面上引用这些文件的地址是 `/u/<userid>/assets|uploads|pages/<文件名>`（站主的还是 `/assets/…`
+那套裸路径，两者互不影响）。权限上，用户只能改自己的站点和文件；站主能改所有人的。
+
+**userid** 是 64 位十六进制，三段拼起来：
+
+| 段 | 长度 | 内容 |
+| --- | --- | --- |
+| 1 | 16 | 用户名的 SHA-256 前缀 |
+| 2 | 32 | 注册时间戳（十六进制，左补零） |
+| 3 | 16 | 随机 |
+
+**邀请码**由站主生成，128 位随机（32 位十六进制），带使用次数上限（默认 10 次，见管理页）。
+注册时才扣次数，注册失败不扣。
+
+### 站主视角：用户与邀请码
+
+管理页（自己的 `/admin`，不带 userid）里多了一个「用户与邀请码」面板：
+
+- **邀请码**：填可用次数和备注 → 生成；列表里显示「已用 / 上限」和剩余次数，可以复制、删除。
+  用完的码会标「已用完」，删掉不影响已注册的人。
+- **用户**：列表显示用户名、注册时间、userid 前几位。每行三个按钮：
+  `↗` 看他/她的主页、`✎` 代管（进他的 `/admin?userid=…`，用站主身份就能编辑）、
+  `✕` 删除（**先把目录归档**到 `/app/users/.deleted/<userid>-<时间>/`，再删账号，误删可以捞回来）。
+- 也可以**直接添加用户**（用户名 + 初始密码），不需要邀请码。
+
+用户的密码用 `scrypt` 加随机盐存在 `/app/data/users.json`（邀请码在 `/app/data/invites.json`）；
+会话 cookie 里带的是「谁」——站主本人，或某个 userid。
 
 ## 站点信息
 
@@ -313,7 +357,8 @@ certbot 自带的 `certbot.timer` 每次续期成功后都会自动调用它，�
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | 宿主机映射端口 |
 | `HOST_SSL_DIR` | `/app/ssl` | 宿主机证书目录，容器内挂在同一个路径 |
 | `HOST_ACME_DIR` | `/var/www/acme` | certbot 的 webroot 目录，挂载为容器内 `/var/www/acme` |
-| `HOST_DATA_DIR` | `/app/data` | 宿主机数据目录，容器内挂在同一个路径 |
+| `HOST_DATA_DIR` | `/app/data` | 宿主机数据目录（站主自己的站），容器内挂在同一个路径 |
+| `HOST_USERS_DIR` | `/app/users` | 宿主机用户目录（每个子管理员一个子目录），容器内挂在同一个路径 |
 | `SERVER_NAME` | `_` | nginx `server_name`，填你的域名 |
 | `SSL_CERT_FILE` / `SSL_KEY_FILE` | `gilloffline.online.pem` / `gilloffline.online.key` | 证书文件名 |
 | `CONTAINER_NAME` / `IMAGE_NAME` / `IMAGE_TAG` | `gilloffline` | 容器与镜像名 |
@@ -331,17 +376,23 @@ ADMIN_PASSWORD='你的密码' SERVER_NAME=example.com HOST_SSL_DIR=/etc/letsencr
 （和证书目录 `/app/ssl` 一个位置、一个风格），容器里挂在同一个路径：
 
 ```
-/app/data/site.json        # 全部格子配置
+/app/data/site.json        # 站主自己的全部格子配置
 /app/data/.session-secret  # 会话签名密钥（自动生成）
-/app/data/assets/          # 站点自己的图片（logo.svg / title.png），首启从仓库播种
-/app/data/uploads/         # 上传的图片
-/app/data/pages/           # 上传的 HTML 页面（及其 css / js / 图片）
+/app/data/assets/          # 站主自己的图片（logo.svg / title.png），首启从仓库播种
+/app/data/uploads/         # 站主上传的图片
+/app/data/pages/           # 站主上传的 HTML 页面（及其 css / js / 图片）
+/app/data/users.json       # 用户账号（用户名、userid、scrypt 密码哈希）
+/app/data/invites.json     # 邀请码和它们的次数
+
+/app/users/<userid>/       # 每个子管理员的小站：site.json + assets/ + uploads/ + pages/
+/app/users/.deleted/       # 删除用户时归档的目录
 ```
 
-这五样东西就是整个站，备份一条命令：
+站主的站全在 `/app/data`，用户的小站在 `/app/users`，两个目录各备一份就是整个站：
 
 ```bash
 cp -a /app/data /root/data-backup-$(date +%F)
+cp -a /app/users /root/users-backup-$(date +%F)
 ```
 
 升级、重建镜像、`--update` 拉代码都不会动这个目录——它只是挂载进容器，没有任何东西往里写。
@@ -361,12 +412,15 @@ cp -a /app/data /root/data-backup-$(date +%F)
 
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/api/site` | 公开 | 读取整站内容 |
+| `GET` | `/api/site` | 公开 | 读取整站内容（带 `?userid=` 就是那个用户的小站） |
 | `GET` | `/api/session` | 公开 | 当前是否已登录、是否配置了密码 |
 | `GET` | `/api/health` | 公开 | 健康检查 |
-| `POST` | `/api/login` | 公开 | 校验密码，下发会话 cookie |
+| `POST` | `/api/login` | 公开 | 站主传 `{password}`，用户传 `{username, password}`，下发会话 cookie |
+| `POST` | `/api/register` | 公开 | `{username, password, invite}` 注册并登录 |
+| `GET` `POST` `DELETE` | `/api/users` | 站主 | 列出 / 直接添加 / 删除用户 |
+| `GET` `POST` `DELETE` | `/api/invites` | 站主 | 列出 / 生成 / 删除邀请码 |
 | `POST` | `/api/logout` | 公开 | 清除 cookie |
-| `PUT` | `/api/site` | 需登录 | 覆盖保存整份配置 |
+| `PUT` | `/api/site` | 需登录 | 覆盖保存整份配置（自己的站，或站主代管） |
 | `GET` `POST` `DELETE` | `/api/files?kind=…` | 需登录 | 列出 / 上传 / 删除文件，`kind` 是 `assets` / `uploads` / `pages` |
 
 ## 安全
@@ -379,6 +433,8 @@ cp -a /app/data /root/data-backup-$(date +%F)
 - 上传限 8 MB，每类文件只接受对应的类型（图片；页面那类还接受 HTML / CSS / JS / JSON），
   扩展名跟着声明的 Content-Type 走，文件名做白名单清洗；`/assets/`、`/uploads/`、`/pages/`
   的静态文件读取都做了路径逃逸检查。
+- 每个用户的内容都在自己的目录里，接口一律按会话里的身份判定归属：别人（包括猜出 userid 的人）
+  只能读、不能改；站主例外。用户密码用 `scrypt` + 每用户随机盐，不是明文也不是单轮哈希。
 - 主页嵌入的 HTML 页面跑在 `iframe sandbox` 里，不给 `allow-same-origin`：页面脚本拿不到本站 cookie、
   调不了本站接口，也读不到外层页面的 DOM（实测 `document.cookie` / `parent.document` / `localStorage` 全部抛 SecurityError）。
   嵌别人的页面进来也不会威胁到管理页。

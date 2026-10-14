@@ -4,6 +4,8 @@
  * "session expired, log in first" detour.
  */
 
+import { withUserid } from './shared.js';
+
 /** Hand a blob to the browser as a download. */
 export function download(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -31,12 +33,13 @@ export async function fetchSession() {
   }
 }
 
-export async function login(password) {
+/** `{ password }` for the site owner, `{ username, password }` for a sub-admin. */
+export async function login(credentials) {
   const res = await fetch('/api/login', {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify(credentials),
   });
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(payload.error || `登录失败（${res.status}）`);
@@ -49,7 +52,10 @@ export function setLoginPrompt(fn) {
 }
 
 async function post(blob, name, kind) {
-  const res = await fetch(`/api/files?kind=${encodeURIComponent(kind)}&name=${encodeURIComponent(name)}`, {
+  const path = withUserid(
+    `/api/files?kind=${encodeURIComponent(kind)}&name=${encodeURIComponent(name)}`
+  );
+  const res = await fetch(path, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': blob.type || 'application/octet-stream' },
