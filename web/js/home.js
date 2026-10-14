@@ -1,4 +1,14 @@
-import { applyGridLayout, assetUrl, createCell, currentUserid, fetchSite, gapPx } from './shared.js';
+import {
+  applyGridLayout,
+  assetUrl,
+  createCell,
+  currentUserid,
+  fetchSite,
+  gapPx,
+  numberSetting,
+  packBoard,
+  repackColumns,
+} from './shared.js';
 
 const grid = document.getElementById('grid');
 
@@ -68,10 +78,22 @@ function applyOwnAssets() {
 }
 
 /** The site's layout settings, and the pass that applies them. */
-let siteColumns = 0;
+let site = {};
 let siteLayout = 'flow';
 let siteCells = [];
-const layout = () => applyGridLayout(grid, siteColumns, { layout: siteLayout, cells: siteCells });
+
+/**
+ * 窄屏重排：棋盘文档在 pad / 手机上按 cells 顺序紧密重排成 N 列，桌面端保持构图。
+ * 重排只改喂给布局的坐标、不动文档，而且不重建 DOM —— 版面变了内嵌页面也不会重载。
+ * 关掉响应式（或某一档填 0）时 cols = 0，走原来的路：棋盘整体缩小、必要时横向滚动。
+ */
+const layout = () => {
+  const cols = repackColumns(site);
+  applyGridLayout(grid, cols || numberSetting(site.columns, 0), {
+    layout: siteLayout,
+    cells: cols ? packBoard(siteCells, cols) : siteCells,
+  });
+};
 
 async function boot() {
   applyOwnAssets();
@@ -79,8 +101,8 @@ async function boot() {
   try {
     const doc = await fetchSite();
     applySite(doc.site || {});
-    siteColumns = Number(doc.site?.columns) || 0;
-    siteLayout = doc.site?.layout === 'board' ? 'board' : 'flow';
+    site = doc.site || {};
+    siteLayout = site.layout === 'board' ? 'board' : 'flow';
     siteCells = doc.cells || [];
     grid.replaceChildren();
     if (!siteCells.length) {

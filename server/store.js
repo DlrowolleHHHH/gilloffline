@@ -69,6 +69,18 @@ const MAX_COLS = 12;
 const MIN_BOARD_COLS = 3;
 const DEFAULT_BOARD_COLS = 12;
 const MAX_CELL_UNITS = 12;
+
+/**
+ * 窄屏重排（只有棋盘布局用得上）：视口低于阈值时，把格子按顺序紧密重排成这么多列。
+ * 阈值是「设备宽度」的概念，和 CSS 媒体查询同一套语言。这些默认值必须和
+ * web/js/shared.js 里的保持一致。
+ */
+const MIN_BREAKPOINT = 240;
+const MAX_BREAKPOINT = 4096;
+const DEFAULT_PAD_WIDTH = 1024;
+const DEFAULT_PHONE_WIDTH = 640;
+const DEFAULT_PAD_COLUMNS = 4;
+const DEFAULT_PHONE_COLUMNS = 2;
 /** Rows are not really limited — this only stops a runaway number from being
  *  stored. The board grows as far as anyone drags a cell. */
 const MAX_ROWS = 1000;
@@ -247,6 +259,15 @@ function normalizeDoc(raw) {
   let columns = safeNumber(site.columns, 0, MAX_COLS, 0);
   // a board is a fixed layout: it needs a real column count
   if (layout === 'board') columns = Math.min(MAX_COLS, Math.max(MIN_BOARD_COLS, columns || DEFAULT_BOARD_COLS));
+
+  // 窄屏重排的阈值。夹紧而不是交换 —— 交换会一次改掉两个值，面板上显示的和刚输入的
+  // 就对不上了；写反了就把手机阈值压到 pad 下面，别让 pad 档整个消失。
+  // 注意 safeNumber 对非法值是直接返回 fallback、不做夹紧，所以不能靠传 max 实现。
+  const padWidth = safeNumber(site.padWidth, MIN_BREAKPOINT, MAX_BREAKPOINT, DEFAULT_PAD_WIDTH);
+  const phoneWidth = Math.min(
+    safeNumber(site.phoneWidth, MIN_BREAKPOINT, MAX_BREAKPOINT, DEFAULT_PHONE_WIDTH),
+    padWidth - 1
+  );
   const cells = Array.isArray(src.cells)
     ? src.cells.slice(0, MAX_CELLS).map((cell) => normalizeCell(cell, { layout, columns }))
     : [];
@@ -284,6 +305,13 @@ function normalizeDoc(raw) {
       layout,
       // the air between cells, three steps; the CSS var --gap comes from it
       gap: oneOf(site.gap, GAP_LEVELS, 'm'),
+      // 棋盘在窄屏上重排成几列。0 是合法值（这一档不重排、保持棋盘原样），
+      // 所以读的时候不能用 `||`。默认关闭：老文档没有这些键 = 维持今天的行为。
+      responsive: site.responsive === true,
+      padWidth,
+      phoneWidth,
+      padColumns: safeNumber(site.padColumns, 0, MAX_COLS, DEFAULT_PAD_COLUMNS),
+      phoneColumns: safeNumber(site.phoneColumns, 0, MAX_COLS, DEFAULT_PHONE_COLUMNS),
     },
     cells,
   };

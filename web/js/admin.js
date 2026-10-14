@@ -11,12 +11,14 @@ import {
   defaultOverlay,
   firstFreeSpot,
   gapPx,
+  numberSetting,
   newId,
   packBoard,
   rectFree,
   rectOf,
   repairBoard,
   toast,
+  viewportWidth,
   withUserid,
 } from './shared.js';
 import { createBoard } from './board.js';
@@ -136,9 +138,56 @@ function renderSite() {
   if (site.icpFromEnv) {
     hint.textContent = `主页当前显示的是环境变量 ICP_NUMBER 里的「${envIcp}」，在上面填写并保存即可覆盖它。`;
   }
+
+  renderResponsiveHint();
+}
+
+/**
+ * 档位列数的选项：0 = 这一档不重排，其余 2–12。
+ * 自己列一份是因为工具条那份没有 2，而手机上常用的就是 2 列。
+ */
+function buildResponsiveOptions() {
+  for (const id of ['site-pad-columns', 'site-phone-columns']) {
+    const select = $(id);
+    for (const value of [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
+      const option = document.createElement('option');
+      option.value = String(value);
+      option.textContent = value === 0 ? '不重排' : `${value} 列`;
+      select.append(option);
+    }
+  }
+}
+
+/**
+ * 面板顶上那行实时说明：三档各自的取值，以及**当前窗口**命中哪一档——
+ * 不用改窗口就能看懂这几个数字在说什么。
+ */
+function renderResponsiveHint() {
+  const hint = $('responsive-hint');
+  const site = state.doc.site || {};
+  const describe = (value) => {
+    const n = numberSetting(value, 0);
+    return n > 0 ? `重排 ${n} 列` : '不重排';
+  };
+  if (!isBoard()) {
+    hint.textContent = '当前是自动排布（flow）：它本来就会跟着窗口宽度重排，用不到这些设置。';
+    return;
+  }
+  if (site.responsive !== true) {
+    hint.textContent = '未使能：窄屏下棋盘整体缩小，缩到每格 96px 以下就横向滚动（今天的行为）。';
+    return;
+  }
+  const pad = numberSetting(site.padWidth, 1024);
+  const phone = numberSetting(site.phoneWidth, 640);
+  const width = viewportWidth();
+  const tier = width < phone ? '手机档' : width < pad ? 'pad 档' : '桌面档';
+  hint.textContent =
+    `≥ ${pad}px 棋盘原样 · ${phone}–${pad - 1}px ${describe(site.padColumns)}` +
+    ` · < ${phone}px ${describe(site.phoneColumns)}　｜　当前窗口 ${width}px → ${tier}`;
 }
 
 function bindSitePanel() {
+  buildResponsiveOptions();
   for (const input of document.querySelectorAll('[data-site]')) {
     const isToggle = input.type === 'checkbox';
     input.addEventListener(isToggle ? 'change' : 'input', () => {
@@ -167,6 +216,17 @@ function bindSitePanel() {
         layoutBoard();
         if (state.editingId) renderPreview();
       }
+      if (RESPONSIVE_KEYS.includes(key)) {
+        // 阈值反着写会让 pad 档整个消失；按服务端同一条规则（夹紧，不交换）先说一声并修正
+        const pad = numberSetting(state.doc.site.padWidth, 1024);
+        const phone = numberSetting(state.doc.site.phoneWidth, 640);
+        if (phone >= pad) {
+          state.doc.site.phoneWidth = Math.max(240, pad - 1);
+          $('site-phone-width').value = String(state.doc.site.phoneWidth);
+          toast(`手机阈值要小于 pad 阈值，已改成 ${state.doc.site.phoneWidth}`, 'error');
+        }
+        renderResponsiveHint();
+      }
       markDirty();
     });
   }
@@ -186,6 +246,9 @@ const board = createBoard({
   // re-render here — just remember that the document is unsaved
   onChange: () => markDirty(),
 });
+
+/** 响应式面板上的那几个设置键，改动它们只需要刷新那行说明。 */
+const RESPONSIVE_KEYS = ['responsive', 'padWidth', 'phoneWidth', 'padColumns', 'phoneColumns'];
 
 /** The widest cell on the board — the column count may never go below it. */
 const widestCell = () =>
@@ -249,14 +312,6 @@ function renderCount() {
   $('cell-count').textContent = count ? `共 ${count} 个格子` : '还没有格子，在下面空白处拖一个出来';
 }
 
-function addCellAtFreeSpot(cell) {
-  toBoard();
-  state.doc.cells.push(cell);
-  markDirty();
-  renderBoard();
-  openDrawer(cell.id);
-}
-
 function removeCell(id) {
   const index = state.doc.cells.findIndex((cell) => cell.id === id);
   if (index < 0) return;
@@ -317,6 +372,7 @@ function bindBoard() {
   window.addEventListener('resize', () => {
     layoutBoard();
     if (state.editingId) renderPreview();
+    renderResponsiveHint(); // 换档的判据就是窗口宽度，说明那行得跟着变
   });
 }
 

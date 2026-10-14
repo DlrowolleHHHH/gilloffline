@@ -252,6 +252,42 @@ export const MAX_ROWS = 1000;
 export const GAP_PX = { s: 8, m: 16, l: 28 };
 export const gapPx = (level) => GAP_PX[level] || GAP_PX.m;
 
+/**
+ * 读一个「数字设置」：空值回落到默认值，其余原样转数字。
+ * 不能写成 `Number(v) || 默认值` —— 列数里的 0 是合法值（这一档不重排），会被吃掉；
+ * 管理页刚改完还没保存时，存进文档的是输入框的**字符串**，也要能读。
+ */
+export function numberSetting(value, fallback) {
+  if (value === '' || value === null || value === undefined) return fallback;
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * 视口宽度。用 documentElement.clientWidth 而不是 window.innerWidth：媒体查询看的就是
+ * 前者（不含经典滚动条），innerWidth 在 Windows/Linux 上会大十几像素，让这些阈值和
+ * showcase.css 里那几个断点在边界附近互相打架。也不用容器宽——阈值是「设备」的概念。
+ */
+export const viewportWidth = () => document.documentElement.clientWidth;
+
+/**
+ * 窄屏该把棋盘重排成几列；**0 = 不重排**（保持棋盘构图）。
+ *
+ * 只对 `layout: 'board'` 有意义：flow 本来就跟着窗口重排，档位对它是多余的。
+ * 这里替调用点把这件事挡住，免得有人把档位列数喂给 applyGridLayout 的 board 分支
+ * ——那个分支会把 columns 当成**棋盘列数**用，棋盘会被压扁。
+ *
+ * 永远返回 Number（文档里的值可能是字符串），并且先判窄档再判宽档：反过来的话
+ * pad 档永远命中，手机档形同虚设。
+ */
+export function repackColumns(site, width = viewportWidth()) {
+  const src = site || {};
+  if (src.layout !== 'board' || src.responsive !== true) return 0;
+  if (width < numberSetting(src.phoneWidth, 640)) return Math.max(0, numberSetting(src.phoneColumns, 2));
+  if (width < numberSetting(src.padWidth, 1024)) return Math.max(0, numberSetting(src.padColumns, 4));
+  return 0;
+}
+
 /** What the layout pass positions: the cells, or their wrappers on the board. */
 const PLACED = ':scope > [data-w]';
 

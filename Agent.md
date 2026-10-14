@@ -27,6 +27,11 @@
     "columns": 12,        // 0 = 自动（仅 flow 有意义）；棋盘必须有真实列数，3..12
     "layout": "board",    // 'flow' | 'board'；字段缺失 = flow（老文档）
     "gap": "m",           // 's' | 'm' | 'l' → 8 / 16 / 28 px，默认 'm'
+    "responsive": false,  // 窄屏重排开关；缺省 = 关（窄屏整体缩小 + 横滚）
+    "padWidth": 1024,     // 视口 < 它 → pad 档
+    "phoneWidth": 640,    // 视口 < 它 → 手机档
+    "padColumns": 4,      // 该档重排成几列；0 = 这一档不重排（保持棋盘原样）
+    "phoneColumns": 2
     ...
   },
   "cells": [
@@ -41,6 +46,10 @@
   （`SIZE_UNITS` 在 `server/store.js`，`SIZES` 在两边各有一份，必须同步）。字符串解析它是坑，别做。
   两者**互不派生**：棋盘用 `pos`，flow 用 `size`；`cellUnits()` 已经处理好（有 `pos` 就用 `pos`）。
 - `pos` 在 flow 文档里也会被保留（`normalizeCell` 两种布局都存）：来回切换布局不能丢摆位。
+- `responsive` 那五个键**只对 board 有意义**：flow 本来就会跟着窗口重排，用不到分档
+  （`repackColumns()` 对 flow 直接返回 0）。**`padColumns` / `phoneColumns` 的 0 是合法值**
+  （这一档不重排），读的时候不能用 `||`。阈值是「设备」概念，判据是
+  `documentElement.clientWidth`（和媒体查询同一个量），不是容器宽。
 - 上限：`MAX_CELLS 200`、`MAX_COLS 12`、`MAX_CELL_UNITS 12`（单个格子的宽/高）、
   `MIN_BOARD_COLS 3`、`DEFAULT_BOARD_COLS 12`、`MAX_ROWS 1000`（防跑飞，不是设计上限）。
 
@@ -121,6 +130,16 @@ legal(rect, exceptId) = 宽高 ≥ 1 && 在列范围内 && 不压到别的格子
   按钮是固定 22px，缩小后比格子还大，会溢出到下面的空行——`opacity: 0` 看不见，
   但照样参与命中测试，把空行里的按下吃掉，于是「新格子怎么都画不出来」。
 - 管理页的缩放**只影响棋盘视图**，不写进 `site.json`（它是一次打开的偏好，不是站点数据）。
+- **窄屏重排是渲染时派生的，不落数据。** `repackColumns(site, width)` 返回该档的列数（0 = 不重排），
+  调用点把它交给 `packBoard(cells, N)` 重新紧密排一遍，再走同一套棋盘渲染 —— `cell.pos` 一个字节不动，
+  服务端不用新增校验，老文档也不用迁移。两条硬约束：
+  1. **它只对 `layout: 'board'` 有意义**，函数自己会挡住 flow 文档。不是因为 flow 不需要重排，
+     而是因为 `applyGridLayout` 的 board 分支把 `columns` 当**棋盘列数**用 —— 把档位列数喂错地方，
+     整块棋盘会被压扁。这条短路就是为此存在的，别绕过它。
+  2. **重排只改 grid placement，不重建 DOM**（`replaceChildren` 会让内嵌 iframe 重新加载）。
+     跨档切换要保证格子节点还是同一批。
+- 阈值是**边界线**，不改变棋盘本身的宽度要求：12 列棋盘要 ~1380px 才放得下，所以 pad 阈值填 1024 时，
+  1024–1379px 之间仍是棋盘原样、仍会横滚。这是「电脑端保持构图」的代价，不是 bug。
 - **抽屉顶部的预览画的是「这个格子」，不是「这个格子所在的页面」。** 它总是把格子摆在一张
   「正好 `min(w, 列数)` 列宽」的棋盘上（`pos` 临时改成 `{0,0,w,h}`），再整体缩放到抽屉里装得下。
   直接套用真实布局是两个方向都会错的：棋盘文档是 12 列 × 96px = 1460px 挤进 390px 的抽屉、
@@ -171,6 +190,9 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 4. 格线起点与轨道起点重合（偏差 0）；格线随横向滚动与格子一起动。
 5. 保存后 `data/site.json` 里的 `pos` 与界面一致，`resolveBoard` 没有改动任何格子（无 `board repaired` 日志）。
 6. 老的 flow 文档（无 `layout`/`pos`）主页渲染不变：间隔 16px、格子尺寸与列数同以前。
+7. 窄屏重排：`responsive` 缺省时各宽度**逐像素**和改动前一致（先存指纹再比对）；
+   打开后各档 `--cols` 分别是棋盘列数 / pad / 手机，重排的那几档**一律不横向溢出**，
+   位置与 `packBoard(cells, N)` 逐格相同，且跨档切换不刷新页面、格子还是同一批 DOM 节点。
 
 ## 7. 踩过的坑（症状 → 原因）
 
@@ -197,4 +219,6 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 - [ ] 格线的尺寸与起点还是轨道本身（`--board-w/h/x/y`）？收边那两层还在？
 - [ ] 行数还是「最低行 + 2」，且没有引入上限？
 - [ ] 服务端仍然会修复重叠/越界，且绝不丢格子？
-- [ ] 上面第 6 节那六条断言都跑过？
+- [ ] 窄屏重排还是渲染时派生的（没写数据、没重建 DOM），且档位列数没被喂给 flow？
+- [ ] `padColumns` / `phoneColumns` 的 0（不重排）在读的时候活下来了？
+- [ ] 上面第 6 节那七条断言都跑过？

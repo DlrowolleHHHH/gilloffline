@@ -108,6 +108,42 @@
           </div>
         </details>
 
+        <details class="panel" id="responsive-panel">
+          <summary>响应式（窄屏重排）</summary>
+          <div class="panel__body">
+            <div class="field--wide">
+              <p class="hint" id="responsive-hint"></p>
+            </div>
+            <div class="field--wide">
+              <label class="check">
+                <input type="checkbox" id="site-responsive" data-site="responsive" />
+                窄屏时把棋盘重排成下面几列
+              </label>
+            </div>
+            <div class="field">
+              <label for="site-pad-width">pad 阈值（px，宽于此用棋盘原样）</label>
+              <input class="input" id="site-pad-width" type="number" min="240" max="4096" step="1" data-site="padWidth" />
+            </div>
+            <div class="field">
+              <label for="site-pad-columns">pad 重排成几列</label>
+              <select class="input" id="site-pad-columns" data-site="padColumns"></select>
+            </div>
+            <div class="field">
+              <label for="site-phone-width">手机阈值（px）</label>
+              <input class="input" id="site-phone-width" type="number" min="240" max="4096" step="1" data-site="phoneWidth" />
+            </div>
+            <div class="field">
+              <label for="site-phone-columns">手机重排成几列</label>
+              <select class="input" id="site-phone-columns" data-site="phoneColumns"></select>
+            </div>
+            <p class="hint field--wide">
+              只影响棋盘布局：桌面端保持你摆的构图，窄屏按格子顺序紧密重排——格子还是原来那么大，
+              宽格子自动收到 N 列以内。某一档选「不重排」就是整体缩小 + 横向滚动（今天的行为）。
+              自动排布（flow）本来就是响应式的，用不到这里。
+            </p>
+          </div>
+        </details>
+
         <details class="panel" id="files-panel">
           <summary>文件</summary>
           <div class="files">
