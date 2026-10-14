@@ -367,6 +367,7 @@ export function applyGridLayout(
     grid.style.setProperty('--cols', String(cols));
     grid.style.setProperty('--cell-size', `${size.toFixed(2)}px`);
     grid.style.setProperty('--board-x', `${(padX + centered).toFixed(2)}px`);
+    grid.style.setProperty('--board-y', `${padY.toFixed(2)}px`);
     grid.style.setProperty('--board-w', `${tracks.toFixed(2)}px`);
     grid.dataset.cols = String(cols);
     grid.dataset.pitch = (size + zoomGap).toFixed(2); // the editor measures pointers with this

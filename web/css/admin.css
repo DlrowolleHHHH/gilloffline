@@ -243,8 +243,13 @@
   --rows: 6;
   --board-w: 100%;
   --board-x: 0px;
+  --board-y: 0px;
   --board-h: calc(var(--rows) * var(--cell-size, 48px) + (var(--rows) - 1) * var(--gap, 6px));
   position: relative;
+  /* the height below is the tracks' height, so the padding must not be part of
+     it: with border-box the last rows — the empty ones you draw into — would
+     fall outside the element and be unreachable with the pointer */
+  box-sizing: content-box;
   /* `safe` keeps a board that is wider than the panel scrollable: plain center
      would push the left columns out of reach */
   justify-content: safe center;
@@ -259,16 +264,27 @@
 
 /* scrolls with the tracks, unlike a background the element would keep in place */
 .admin-board::before {
+  --pitch: calc(var(--cell-size, 48px) + var(--gap));
   content: '';
   position: absolute;
-  top: 0;
+  /* the padding box is the origin, the tracks start one padding further in */
+  top: var(--board-y);
   left: var(--board-x);
   width: var(--board-w);
   height: var(--board-h);
   pointer-events: none;
+  /*
+   * The tiled layers draw a line at the *start* of each cell, which covers every
+   * column's left edge and every row's top edge — the board's own top and left
+   * come free — but the last column's right edge and the last row's bottom edge
+   * land in the middle of a tile and stay open. The two full-size layers close
+   * the rectangle; at 100% they sit under the panel's border and go unnoticed.
+   */
   background-image: linear-gradient(to right, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px);
-  background-size: calc(var(--cell-size, 48px) + var(--gap)) calc(var(--cell-size, 48px) + var(--gap));
+    linear-gradient(to bottom, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(to left, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(to top, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px);
+  background-size: var(--pitch) var(--pitch), var(--pitch) var(--pitch), 100% 100%, 100% 100%;
 }
 
 .admin-board.is-dragging {
@@ -430,6 +446,14 @@
   backdrop-filter: blur(6px);
   opacity: 0;
   transition: opacity 0.16s;
+  /*
+   * The buttons are a fixed 22px. Zoomed out, a cell is smaller than that, and
+   * the bar used to spill out of it — invisible (opacity 0) but still hit-tested,
+   * so it quietly swallowed presses in the empty rows below. Clipping to the
+   * cell keeps it working at any size, and changes nothing at 100%.
+   */
+  max-height: calc(100% - 10px);
+  overflow: hidden;
 }
 
 .slot:hover .slot__bar,
