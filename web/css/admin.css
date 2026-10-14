@@ -536,6 +536,10 @@
   --gap: 10px;
   /* a definite width, otherwise auto-fill collapses to a single column */
   width: 100%;
+  /* …but never wider than that width: a grid item's automatic minimum size lets
+     its tracks push the element past the drawer, and then the layout pass reads
+     a blown-out clientWidth back and everything after that is nonsense */
+  min-width: 0;
 }
 
 .drawer__body {

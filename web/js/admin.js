@@ -198,8 +198,6 @@ const widestCell = () =>
 const boardCols = () =>
   Math.min(12, Math.max(3, widestCell(), Number(state.doc.site?.columns) || 12));
 const isBoard = () => state.doc.site?.layout === 'board';
-/** The layout the drawer's preview should mimic. */
-const layoutMode = () => (isBoard() ? 'board' : 'flow');
 
 /** What to draw: the stored positions, or how CSS would pack the flow today. */
 const boardCells = () => (isBoard() ? state.doc.cells : packBoard(state.doc.cells, boardCols()));
@@ -553,15 +551,61 @@ function onEdited() {
   markDirty();
 }
 
+/** The preview draws a board unit at about this many px. */
+const PREVIEW_UNIT = 62;
+/** …and no taller than this, so a tall cell does not push the form down. */
+const PREVIEW_MAX_H = 190;
+/** On a 12-column page a cell is about this wide — the reference for the gap. */
+const PREVIEW_REFERENCE = 98;
+
+/** How much room the preview actually has (the box, minus its padding). */
+function previewWidth() {
+  const box = preview.parentElement;
+  const style = getComputedStyle(box);
+  const pad = (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0);
+  return Math.max(80, (box.clientWidth || 320) - pad);
+}
+
+/**
+ * What will this cell look like on the page?
+ *
+ * The answer is the same in both layouts: a cell spans `w × h` units, so the
+ * preview draws **this cell and nothing else**, on a grid exactly that many
+ * columns wide, scaled to fit the drawer.
+ *
+ * Drawing the real grid instead is what used to happen for a board document —
+ * twelve columns of 96px is 1460px of grid inside a 390px drawer, with the cell
+ * parked at its own column and therefore off-screen — and a flow document had
+ * the mirror problem, a wide cell spilling out of the box (8 columns of 62px is
+ * 566px). Both are the same bug: previewing the page instead of the cell.
+ */
 function renderPreview() {
   const cell = currentCell();
   preview.replaceChildren();
   if (!cell) return;
   preview.append(createCell(cell));
-  // the preview follows the site's layout settings, gap included, so it looks
-  // like the real page
-  preview.style.setProperty('--gap', `${gapPx(state.doc.site?.gap)}px`);
-  applyGridLayout(preview, Number(state.doc.site?.columns) || 0, { layout: layoutMode(), cells: [cell] });
+
+  const site = state.doc.site || {};
+  const { w, h } = cellUnits(cell); // pos when it has one, the named size otherwise
+  // Columns the page would give it: a board has a fixed count, a flow document
+  // caps the span at the column setting (0 = auto, which is the cell's own width)
+  const cols = Math.min(w, isBoard() ? boardCols() : Number(site.columns) || w);
+  const box = previewWidth();
+  // the page's spacing as a share of a cell, kept at whatever size we draw
+  const ratio = gapPx(site.gap) / PREVIEW_REFERENCE;
+  // how big one unit would be if the cell filled the box
+  const fitUnit = box / (cols + (cols - 1) * ratio);
+  const unit = Math.min(PREVIEW_UNIT, fitUnit, PREVIEW_MAX_H / (h + (h - 1) * ratio));
+  // The gap is stated at the *fit* size, not at `unit`: the layout pass divides
+  // the box by (cell + gap) and then multiplies by `scale` below, and the two
+  // cancel out exactly — so the drawn gap is `ratio * unit` either way.
+  preview.style.setProperty('--gap', `${(ratio * fitUnit).toFixed(2)}px`);
+  applyGridLayout(preview, cols, {
+    layout: 'board',
+    cells: [{ ...cell, pos: { x: 0, y: 0, w: cols, h } }],
+    minCell: 1, // the layout pass must not floor this: the preview always fits
+    scale: unit / fitUnit,
+  });
 }
 
 function openDrawer(id) {
