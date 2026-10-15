@@ -37,6 +37,7 @@
 .grid.is-fixed {
   grid-template-columns: repeat(var(--cols, 6), var(--cell-size, var(--cell)));
   grid-auto-rows: var(--cell-size, var(--cell));
+  justify-content: safe center;
 }
 
 /*
