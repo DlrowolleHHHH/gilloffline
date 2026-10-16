@@ -1352,6 +1352,15 @@ function bindToolbar() {
     boardEl.querySelector(`.slot[data-id="${CSS.escape(cell.id)}"]`)?.scrollIntoView({ block: 'nearest' });
   });
   $('btn-save').addEventListener('click', save);
+  // ⌘S / Ctrl+S 也能保存 —— 不 preventDefault 的话浏览器会弹出「保存网页」对话框。
+  // 只认不带 shift 的 s（⇧⌘S 是浏览器的「另存为」，别抢）。
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 's' || !(event.metaKey || event.ctrlKey)) return;
+    event.preventDefault();
+    // 登录页不触发；保存中（按钮被禁用）也不重复发请求
+    if ($('app-view').hidden || $('btn-save').disabled) return;
+    save();
+  });
   $('btn-export').addEventListener('click', exportJson);
   $('btn-import').addEventListener('click', () => $('import-file').click());
   $('import-file').addEventListener('change', (event) => {
