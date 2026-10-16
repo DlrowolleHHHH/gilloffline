@@ -110,13 +110,14 @@ function absorbDoc(doc) {
   return doc;
 }
 
-function renderSite() {
-  const site = state.doc.site || {};
-  // '自动' only means something to the flow layout
-  const auto = $('site-columns').querySelector('option[value="0"]');
-  auto.disabled = isBoard();
-  auto.textContent = isBoard() ? '自动（棋盘用不了）' : '自动';
-  // nor does the board allow a column count below its widest cell
+/**
+ * 棋盘上最宽的格子占几列：比它小的列数选项禁用掉，并说明原因。
+ *
+ * 格子的宽度随时会变（拖右下角手柄、新建、删除、抽屉里改宽），所以这件事挂在
+ * `markDirty()` 上 —— 它是所有改动路径唯一的漏斗。只在加载/保存时算一次的话，
+ * 拖完手柄提示还停在旧值上。
+ */
+function updateColumnFloor() {
   const floor = widestCell();
   for (const option of $('site-columns').options) {
     const value = Number(option.value);
@@ -124,9 +125,18 @@ function renderSite() {
   }
   // the standing explanation lives in the control's tooltip; this line only
   // speaks up when the board is currently refusing something
-  const columnsHint = $('site-columns-hint');
-  columnsHint.hidden = !(isBoard() && floor > 1);
-  columnsHint.textContent = `棋盘上最宽的格子占 ${floor} 列，列数不能小于它。`;
+  const hint = $('site-columns-hint');
+  hint.hidden = !(isBoard() && floor > 1);
+  hint.textContent = `棋盘上最宽的格子占 ${floor} 列，列数不能小于它。`;
+}
+
+function renderSite() {
+  const site = state.doc.site || {};
+  // '自动' only means something to the flow layout
+  const auto = $('site-columns').querySelector('option[value="0"]');
+  auto.disabled = isBoard();
+  auto.textContent = isBoard() ? '自动（棋盘用不了）' : '自动';
+  updateColumnFloor();
   for (const input of document.querySelectorAll('[data-site]')) {
     const key = input.dataset.site;
     if (input.type === 'checkbox') input.checked = site[key] === true;
@@ -1276,6 +1286,8 @@ function bindPeople() {
 /* -------------------------------------------------------------- save/export */
 
 function markDirty() {
+  // 每次改动都可能动到格子的宽度，列数下限跟着重算（拖完手柄那一刻就生效）
+  updateColumnFloor();
   state.dirty = true;
   $('dirty-flag').hidden = false;
 }
