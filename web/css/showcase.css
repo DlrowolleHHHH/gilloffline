@@ -364,18 +364,25 @@ body.is-fullscreen {
 .cell__overlay[data-ratio='1/2'][data-dir='top'] { height: 50%; bottom: auto; justify-content: flex-start; transform: translateY(-100%); }
 .cell__overlay[data-ratio='1/2'][data-dir='bottom'] { height: 50%; justify-content: flex-start; transform: translateY(100%); }
 
-.cell:hover .cell__overlay,
+/*
+ * 「悬浮看详情」只在真有 hover 的设备（鼠标、触控板）上生效。
+ *
+ * 手机浏览器会把**点过的元素一直当成 :hover**（粘住，直到点别处），所以触屏上这条规则
+ * 一旦命中就再也不松开：JS 把 .is-open 去掉了，面板照样挂着 —— 详情点不掉。
+ * 触屏一律由 .is-open 说了算（由 home.js 在点击时切换）。
+ */
+@media (hover: hover) {
+  .cell:hover .cell__overlay,
+  .cell:focus-within .cell__overlay {
+    transform: translate(0, 0);
+  }
+}
+
+/* 键盘焦点进来时也打开；触屏则是 .is-open */
 .cell:focus-visible .cell__overlay,
-.cell:focus-within .cell__overlay,
 .cell.is-open .cell__overlay {
   transform: translate(0, 0);
 }
-
-/* tap support on touch screens */
-/*
- * 触屏也显示角标文字：原来这里整块 display: none，手机上就永远看不到格子的名字了。
- * 角标本来就常显，和设备有没有 hover 无关。
- */
 
 /* ----------------------------------------------------------------- states */
 

@@ -210,6 +210,7 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 | 横向滚动后格子和格线对不上 | 格线画在元素背景上，默认不随内容滚动（曾靠 `background-attachment: local`，现改为伪元素） |
 | 列数能调到比最宽的格子还小 | 缺下限：`boardCols()` 取 `max(3, 最宽格子, 设置值)`，选项也要禁用 |
 | 抽屉预览永远空白 | `renderPreview` 调了不存在的 `layoutMode()`，一开抽屉就抛异常 |
+| 手机上详情面板点不掉 | `.cell:hover` 也能打开详情，而触屏会把点过的元素**一直当成 :hover**（粘住）—— JS 摘掉 `.is-open` 也没用。所有 hover 打开的规则都要放进 `@media (hover: hover)` |
 | 预览里看不到格子 / 一片空白 | 预览画的是整块棋盘（12 列 × 96px = 1460px），格子还停在自己的列上，早出框了 |
 | 预览里宽格子撑出抽屉 | 同上，flow 版：宽格子按 62px 一格算，8 列 = 566px 撑爆 353px 的框 |
 | 指针位置整体偏 7px | `unitAt` 没减棋盘的边框 + 内边距（缩小后 7px 就是小半格） |
