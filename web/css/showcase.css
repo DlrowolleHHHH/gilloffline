@@ -1,5 +1,42 @@
 /* The showcase window grid, shared by the home page and the editor preview. */
 
+/*
+ * 子管理员的站右上角那个「管理页」入口。固定在视口角上，滚动时也够得着；
+ * 层高压在 40：全屏嵌入（80/81）和提示条（60）打开时要盖住它。
+ */
+.admin-entry {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 40;
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink-600) 86%, transparent);
+  backdrop-filter: blur(6px);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-decoration: none;
+  transition: color 0.16s, border-color 0.16s;
+}
+
+.admin-entry:hover,
+.admin-entry:focus-visible {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* 手机上收一点：标题图也在左上角那一行，别撞上 */
+@media (max-width: 640px) {
+  .admin-entry {
+    top: 10px;
+    right: 12px;
+    padding: 6px 11px;
+    font-size: 12px;
+  }
+}
+
 .site-subtitle {
   max-width: 62ch;
   margin: 6px auto 30px;

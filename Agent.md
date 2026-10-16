@@ -15,7 +15,7 @@
 | `web/js/shared.js` | 几何与布局核心：`applyGridLayout`、`packBoard`、`repairBoard`、`firstFreeSpot`、碰撞判断 |
 | `web/js/board.js` | 棋盘的交互与渲染：拖拽手势、网格吸附、ghost 预览、行数增长 |
 | `web/js/admin.js` | 管理页把两者接起来：工具条（列数/间隔/缩放）、抽屉、脏标记 |
-| `web/js/home.js` | 主页：套用 `site` 设置（强调色、间隔、布局）并渲染 |
+| `web/js/home.js` | 主页：套用 `site` 设置（强调色、间隔、布局）并渲染；子管理员的站（`?userid=…`）还会亮出右上角那个 `#admin-entry`（`position: fixed` + `z-index: 40`，**故意压在**全屏嵌入 80/81 和提示条 60 下面） |
 | `web/css/admin.css` | `.admin-board`（棋盘容器）与 `.admin-board::before`（格线） |
 | `data/site.json` | 提交进仓库的种子数据，运行时只读（首次部署时复制到数据目录） |
 

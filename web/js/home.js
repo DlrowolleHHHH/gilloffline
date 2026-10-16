@@ -9,6 +9,7 @@ import {
   numberSetting,
   packBoard,
   repackColumns,
+  withUserid,
 } from './shared.js';
 
 const grid = document.getElementById('grid');
@@ -78,6 +79,18 @@ function applyOwnAssets() {
   if (icon) icon.href = assetUrl('logo.svg');
 }
 
+/**
+ * 子管理员的站右上角常驻一个「管理页」入口，点进去就是自己的 /admin?userid=…
+ * （没登录会落在登录页，登录后直接进自己的页面）。
+ * 站主的站不带 userid，就不显示：他本来就有主图和格子里的入口。
+ */
+function renderAdminEntry() {
+  if (!currentUserid()) return;
+  const entry = document.getElementById('admin-entry');
+  entry.href = withUserid('/admin');
+  entry.hidden = false;
+}
+
 /** The site's layout settings, and the pass that applies them. */
 let site = {};
 let siteLayout = 'flow';
@@ -98,6 +111,7 @@ const layout = () => {
 
 async function boot() {
   applyOwnAssets();
+  renderAdminEntry();
   window.addEventListener('resize', layout);
   try {
     const doc = await fetchSite();

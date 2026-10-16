@@ -17,6 +17,12 @@
       </div>
     </header>
 
+    <!--
+      子管理员自己的站：右上角常驻一个回管理页的入口（便于随时回来改自己的页面）。
+      站主的站没有 ?userid=，这个按钮也就不显示 —— 他本来就有主图和格子里的入口。
+    -->
+    <a class="admin-entry" id="admin-entry" href="/admin" hidden>管理页</a>
+
     <main class="wrap">
       <p class="site-subtitle" id="subtitle" hidden></p>
       <div class="grid" id="grid"></div>
