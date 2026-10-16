@@ -147,18 +147,21 @@ export function resolveLink(link) {
 }
 
 export function createCell(cell) {
-  const node = document.createElement(cell.link ? 'a' : 'article');
+  // 「跳转链接」和「嵌入的页面」互斥：两个地址都留着，由 clickMode 说哪个生效
+  const clickEmbed = cell.clickMode !== 'link' ? cell.embed || '' : '';
+  const clickLink = cell.clickMode === 'link' ? cell.link || '' : '';
+  const node = document.createElement(clickLink ? 'a' : 'article');
   node.className = cellClasses(cell).join(' ');
   node.dataset.id = cell.id;
   node.dataset.fit = cell.imageFit;
   // the layout pass needs the units; the classes alone are not readable back
   node.dataset.w = SIZES[cell.size] ? SIZES[cell.size].w : 1;
   node.dataset.h = SIZES[cell.size] ? SIZES[cell.size].h : 1;
-  if (cell.link) node.draggable = false; // a native link drag fights the board
+  if (clickLink) node.draggable = false; // a native link drag fights the board
   applyCellStyle(node, cell);
 
-  if (cell.link) {
-    node.href = resolveLink(cell.link);
+  if (clickLink) {
+    node.href = resolveLink(clickLink);
     node.target = '_blank';
     node.rel = 'noopener noreferrer';
   }
@@ -200,8 +203,8 @@ export function createCell(cell) {
    *
    * 用 <span> 而不是 <button>：格子配了链接时整格是 <a>，<a> 里不能再放交互元素。
    */
-  if (cell.embed) {
-    node.dataset.fullscreen = cell.embed;
+  if (clickEmbed) {
+    node.dataset.fullscreen = clickEmbed;
     const expand = document.createElement('span');
     expand.className = 'cell__expand';
     expand.setAttribute('role', 'button');

@@ -533,8 +533,8 @@ function fillForm(cell) {
   setColorPicker(els.ovBg, els.ovBgText, cell.overlay.bgColor);
   setColorPicker(els.ovFg, els.ovFgText, cell.overlay.textColor);
   els.link.value = cell.link;
-  // 打开时按数据推断用哪一边：有嵌入就用嵌入（和渲染的取舍一致），否则用链接
-  actionTab = cell.embed ? 'embed' : 'link';
+  // 打开时用数据里记着的那个；老数据没有这个字段时，服务端已经按老规矩补好了
+  actionTab = cell.clickMode === 'link' ? 'link' : 'embed';
   syncActionTabs();
 
   const thumbWrap = $('thumb-current');
@@ -552,10 +552,11 @@ function fillForm(cell) {
 
 /**
  * 抽屉里的「点击这个格子时」是两个互斥选项：跳转链接 / 嵌入 HTML。
- * 两者都绑在格子的点击上，只能有一个 —— 所以下面用按钮切换，而不是把另一个禁掉。
+ * 两者都绑在格子的点击上，同一时刻只有一个生效 —— 所以用按钮切换。
  *
- * 当前选哪个是个界面状态（`actionTab`），不是数据：打开时按数据推断（有嵌入就用嵌入，
- * 否则用链接），之后跟着点击走。数据里两个都有（导入/手改）时以**嵌入**为准，和渲染一致。
+ * 但**两个地址都保留**：切换只是改「哪个生效」，填过的内容不丢，随时能切回来。
+ * 生效的那个记在数据的 `clickMode` 里（老数据没有这个字段时由服务端按老规矩补上）。
+ * 界面上的 `actionTab` 就是它的一份投影。
  */
 let actionTab = 'link';
 
@@ -569,14 +570,12 @@ function syncActionTabs() {
   $('panel-embed').hidden = actionTab !== 'embed';
 }
 
-/** 切到另一边：把对面已经填好的地址清掉（互斥嘛，留着只会让人以为它还有效）。 */
+/**
+ * 切到另一边。两边的地址都**保留**：填过的内容不因为切换而丢，只是生效的换一个，
+ * 想换回来点一下就行。生效的那个记在数据的 clickMode 里。
+ */
 function switchActionTab(next) {
   if (next === actionTab) return;
-  const other = next === 'link' ? els.embed : els.link;
-  if (other.value.trim()) {
-    other.value = '';
-    toast(next === 'link' ? '已切到「跳转链接」，原来嵌入的页面地址已清空' : '已切到「嵌入 HTML」，原来的链接已清空', 'ok');
-  }
   actionTab = next;
   syncActionTabs();
   onEdited();
@@ -606,8 +605,9 @@ function applyForm() {
   cell.borderColor = readColorPicker(els.borderColor, els.borderColorText, '#7e46b9');
   cell.image = els.image.value.trim();
   cell.html = els.html.value.trim();
-  // 互斥：只写当前选中那一边（另一边在数据里总是空的）
-  cell.embed = actionTab === 'embed' ? els.embed.value.trim() : '';
+  // 两个地址都存下来（互斥只体现在 clickMode 上），填过的内容不会因为切换而丢
+  cell.embed = els.embed.value.trim();
+  cell.clickMode = actionTab;
   cell.imageFit = els.fit.value;
   cell.imageTitle = els.imageTitle.value;
   cell.imageTitleColor = readColorPicker(els.imageTitleColor, els.imageTitleColorText, '#ffffff');
@@ -621,7 +621,7 @@ function applyForm() {
     bgColor: readColorPicker(els.ovBg, els.ovBgText, '#0b0a12f2'),
     textColor: readColorPicker(els.ovFg, els.ovFgText, '#ffffff'),
   };
-  cell.link = actionTab === 'link' ? els.link.value.trim() : '';
+  cell.link = els.link.value.trim();
   // 位置和尺寸不在这里改：抽屉里没有那一栏，摆位靠拖拽（board.js 的 legal()）、
   // 尺寸靠拖右下角手柄或「尺寸」模版 —— 各自都带校验，这里不碰 cell.pos。
 }

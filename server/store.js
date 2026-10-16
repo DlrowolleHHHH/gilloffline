@@ -54,6 +54,8 @@ const SIZE_UNITS = {
 const DIRECTIONS = ['left', 'right', 'top', 'bottom'];
 const RATIOS = ['1/1', '1/2'];
 const TYPES = ['image', 'solid', 'html'];
+/** 格子的点击用哪个：跳转链接，还是全屏展开嵌入的页面（两者互斥，但两个地址都留着）。 */
+const CLICK_MODES = ['link', 'embed'];
 const FITS = ['cover', 'contain'];
 /** 'flow' = an ordered list CSS packs; 'board' = every cell has a position. */
 const LAYOUTS = ['flow', 'board'];
@@ -207,8 +209,11 @@ function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
     // 「网页封面」那张页面：直接铺在格子上渲染（多半是个带动画的 HTML）
     html: safePageUrl(src.html),
     // 「嵌入的页面」：任何类型都能再嵌一个，和封面是两回事 ——
-    // 有它，格子上才会浮出放大角标、点开全屏
+    // 有它（且 clickMode 是 embed），格子上才会浮出放大角标、点开全屏
     embed: safePageUrl(src.embed),
+    // 两个地址都留着，这里只记哪个生效。缺省按老规矩推断：只填了链接就是链接，
+    // 其余情况（只填嵌入、两个都有、都没有）算嵌入 —— 和之前的渲染取舍一致。
+    clickMode: oneOf(src.clickMode, CLICK_MODES, src.link && !src.embed ? 'link' : 'embed'),
     // shared
     link: safeUrl(src.link),
     overlay: normalizeOverlay(src.overlay),
