@@ -2,6 +2,7 @@ import {
   applyGridLayout,
   assetUrl,
   createCell,
+  createFrame as sharedCreateFrame,
   currentUserid,
   fetchSite,
   gapPx,
@@ -121,10 +122,60 @@ async function boot() {
   }
 }
 
+/* ------------------------------------------------------- 封面格子的全屏展开 */
+
+/**
+ * 封面模式的 HTML 格子：格子上只有一块封面，点开才把页面全屏展开。
+ *
+ * iframe 是**打开时创建、关掉就移除**的：没点开的格子不加载页面（省流量，也免得
+ * 几个页面在后台一起跑），关掉之后页面里的脚本和定时器也随 iframe 一起没了。
+ */
+let fullscreen = null;
+
+function closeFullscreen() {
+  if (!fullscreen) return;
+  fullscreen.remove(); // iframe 跟着走：页面里的脚本、定时器随之停止
+  fullscreen = null;
+  document.body.classList.remove('is-fullscreen');
+}
+
+function openFullscreen(url, title) {
+  closeFullscreen();
+  const box = document.createElement('div');
+  box.className = 'fullscreen';
+  const frame = sharedCreateFrame(url, title);
+  frame.className = 'fullscreen__frame';
+  frame.loading = 'eager'; // 这回是真要看它了
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'fullscreen__close';
+  close.title = '关闭（Esc）';
+  close.setAttribute('aria-label', '关闭全屏');
+  close.textContent = '✕';
+  close.addEventListener('click', closeFullscreen);
+
+  box.append(frame, close);
+  document.body.append(box);
+  document.body.classList.add('is-fullscreen');
+  fullscreen = box;
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeFullscreen();
+});
+
 // Touch devices have no hover: tap a cell once to open its detail panel.
 grid.addEventListener('click', (event) => {
   const cell = event.target.closest('.cell');
-  if (!cell || !cell.querySelector('.cell__overlay')) return;
+  if (!cell) return;
+  // 封面格子：点一下展开全屏。格子可能同时是 <a>（配了链接），先拦下跳转。
+  if (cell.dataset.fullscreen) {
+    event.preventDefault();
+    openFullscreen(cell.dataset.fullscreen, cell.querySelector('.cell__caption')?.textContent || '');
+    return;
+  }
+  if (!cell.querySelector('.cell__overlay')) return;
   if (window.matchMedia('(hover: none)').matches) {
     if (!cell.classList.contains('is-open')) {
       event.preventDefault();

@@ -123,6 +123,105 @@
   border: 0;
 }
 
+/* 封面模式：不渲染页面，只有一块纯色封面 + 右下角一个小小的展开标记 */
+.cell__media--cover {
+  background: var(--solid, var(--solid-fallback, #1d1929));
+  cursor: zoom-in;
+}
+
+.cell__expand {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--ink-900, #0b0a12) 72%, transparent);
+  opacity: 0.5;
+  transition: opacity 0.16s;
+}
+
+/* 两个对角的小箭头，就是常见的「展开」符号 */
+.cell__expand::before,
+.cell__expand::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  color: var(--caption-fg, #fff);
+}
+
+.cell__expand::before {
+  top: 5px;
+  right: 5px;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+.cell__expand::after {
+  left: 5px;
+  bottom: 5px;
+  border-right: 0;
+  border-top: 0;
+}
+
+.cell:hover .cell__expand {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------ 全屏展开 */
+
+/*
+ * 封面格子点开后的全屏层：一个铺满视口的沙箱 iframe + 右上角的悬浮关闭按钮。
+ * iframe 是打开时创建、关掉就移除的，所以没点开的页面不会被加载。
+ */
+.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--ink-900, #08070d);
+}
+
+.fullscreen__frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff; /* 页面自己没设底色时，别透出站点的深色 */
+}
+
+.fullscreen__close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 81;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  background: rgb(12 10 20 / 72%);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.16s, transform 0.16s;
+}
+
+.fullscreen__close:hover {
+  background: rgb(12 10 20 / 92%);
+  transform: scale(1.06);
+}
+
+body.is-fullscreen {
+  overflow: hidden;
+}
+
 .cell__media--empty {
   display: grid;
   place-items: center;

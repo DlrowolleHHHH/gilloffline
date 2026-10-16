@@ -335,6 +335,17 @@
             <button class="btn btn--ghost" id="btn-open-html" type="button">新标签页打开</button>
             <input type="file" id="upload-file-html" accept=".html,.htm,text/html" hidden />
           </div>
+          <div class="field--wide">
+            <label class="check">
+              <input type="checkbox" id="ed-html-cover" />
+              封面模式（格子上不渲染页面，点开才全屏展开）
+            </label>
+            <p class="hint">
+              打开后格子只显示一块纯色封面（颜色用下面的「纯色」选）和角标，页面**不加载**，
+              点一下才全屏展开，右上角有悬浮的关闭按钮（Esc 也行）。
+              封面模式下点击是展开，格子的「链接」不会触发。
+            </p>
+          </div>
           <p class="hint">
             上传的页面存在数据目录里，重新部署不会丢。页面在沙箱里运行：可以用 JavaScript，
             但读不到本站的登录状态、调不了本站接口，也影响不到外层页面。

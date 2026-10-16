@@ -110,7 +110,27 @@ export function applyCellStyle(node, cell) {
   node.style.setProperty('--bw', `${cell.borderWidth}px`);
   node.style.setProperty('--border', cell.borderColor);
   node.style.setProperty('--caption-fg', cell.imageTitleColor);
-  if (cell.type === 'solid') node.style.setProperty('--solid', cell.color);
+  // 纯色格子用它当底色；封面模式的 HTML 格子也用它 —— 封面就是一块纯色
+  if (cell.type === 'solid' || (cell.type === 'html' && cell.htmlCover)) {
+    node.style.setProperty('--solid', cell.color);
+  }
+}
+
+/**
+ * 沙箱里的 iframe —— 格子里和全屏展开用的是同一个。
+ *
+ * 集中在这里，是为了让「HTML 页面一律跑在非 same-origin 的沙箱里」这条规则只有
+ * 一个出处：沙箱**不能**加 allow-same-origin（那等于把本站的登录状态交给页面）。
+ */
+export function createFrame(src, title) {
+  const frame = document.createElement('iframe');
+  frame.className = 'cell__frame';
+  frame.src = src;
+  frame.loading = 'lazy';
+  frame.title = title || '嵌入的页面';
+  frame.referrerPolicy = 'no-referrer';
+  frame.setAttribute('sandbox', FRAME_SANDBOX);
+  return frame;
 }
 
 /**
@@ -163,15 +183,18 @@ export function createCell(cell) {
   if (cell.type === 'html') {
     const media = document.createElement('div');
     media.className = 'cell__media';
-    if (cell.html) {
-      const frame = document.createElement('iframe');
-      frame.className = 'cell__frame';
-      frame.src = cell.html;
-      frame.loading = 'lazy';
-      frame.title = cell.imageTitle || '嵌入的页面';
-      frame.referrerPolicy = 'no-referrer';
-      frame.setAttribute('sandbox', FRAME_SANDBOX);
-      media.append(frame);
+    if (cell.html && cell.htmlCover) {
+      // 封面模式：不渲染页面，只放一块纯色封面（+ 右下角一个小小的展开标记）。
+      // 页面地址挂在 dataset 上，由主页在点击时拿去全屏展开 —— 不是每个格子都会
+      // 被点开，页面就没必要跟着页面一起加载。
+      media.classList.add('cell__media--cover');
+      node.dataset.fullscreen = cell.html;
+      const expand = document.createElement('span');
+      expand.className = 'cell__expand';
+      expand.setAttribute('aria-hidden', 'true');
+      media.append(expand);
+    } else if (cell.html) {
+      media.append(createFrame(cell.html, cell.imageTitle));
     } else {
       media.classList.add('cell__media--empty');
       const hint = document.createElement('span');

@@ -200,6 +200,8 @@ function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
     color: safeColor(src.color, '#7e46b9'),
     // html cells — rendered in a sandboxed iframe on the home page
     html: safePageUrl(src.html),
+    // 封面模式：格子上不渲染页面，只放一块封面，点开才全屏展开
+    htmlCover: src.htmlCover === true,
     // shared
     link: safeUrl(src.link),
     overlay: normalizeOverlay(src.overlay),

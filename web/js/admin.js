@@ -410,6 +410,7 @@ const els = {
   borderColorText: $('ed-border-color-text'),
   image: $('ed-image'),
   html: $('ed-html'),
+  htmlCover: $('ed-html-cover'),
   fit: $('ed-fit'),
   imageTitle: $('ed-image-title'),
   imageTitleColor: $('ed-image-title-color'),
@@ -519,6 +520,7 @@ function fillForm(cell) {
   setColorPicker(els.borderColor, els.borderColorText, cell.borderColor);
   els.image.value = cell.image;
   els.html.value = cell.html || '';
+  els.htmlCover.checked = cell.htmlCover === true;
   els.fit.value = cell.imageFit;
   els.imageTitle.value = cell.imageTitle;
   setColorPicker(els.imageTitleColor, els.imageTitleColorText, cell.imageTitleColor);
@@ -549,7 +551,8 @@ function syncTypeVisibility() {
   const type = els.type.value;
   $('fs-image').hidden = type !== 'image';
   $('fs-html').hidden = type !== 'html';
-  $('fs-solid').hidden = type !== 'solid';
+  // 封面模式的 HTML 格子也要用「纯色」那一栏 —— 封面就是一块纯色
+  $('fs-solid').hidden = type !== 'solid' && !(type === 'html' && els.htmlCover.checked);
   // the always-on caption sits under both an image and an embedded page
   $('fs-caption').hidden = type !== 'image' && type !== 'html';
 }
@@ -564,6 +567,7 @@ function applyForm() {
   cell.borderColor = readColorPicker(els.borderColor, els.borderColorText, '#7e46b9');
   cell.image = els.image.value.trim();
   cell.html = els.html.value.trim();
+  cell.htmlCover = els.htmlCover.checked;
   cell.imageFit = els.fit.value;
   cell.imageTitle = els.imageTitle.value;
   cell.imageTitleColor = readColorPicker(els.imageTitleColor, els.imageTitleColorText, '#ffffff');
@@ -747,6 +751,11 @@ function bindEditor() {
     els.ovRatio, els.link,
   ];
   for (const element of new Set(live)) element.addEventListener('input', onEdited);
+  // checkbox 发的是 change；勾掉/勾上封面模式会连带改变「纯色」那栏的可见性
+  els.htmlCover.addEventListener('change', () => {
+    syncTypeVisibility();
+    onEdited();
+  });
 
   els.type.addEventListener('change', () => {
     syncTypeVisibility();
