@@ -575,8 +575,8 @@ function syncTypeVisibility() {
   $('fs-solid').hidden = type !== 'solid';
   // the always-on caption sits under both an image and an embedded page
   $('fs-caption').hidden = type !== 'image' && type !== 'html';
-  // positions only mean something on a board
-  $('fs-pos').hidden = !isBoard();
+  // 「位置与尺寸」整块在 HTML 里就是 hidden 的：摆位和改尺寸都靠拖拽，
+  // 但那四个输入框还在，applyForm() 每次都要读它们（别顺手删掉）
 }
 
 /** Pull every field back into the cell being edited. */
@@ -700,10 +700,11 @@ function renderPreview() {
  * 打开抽屉。
  *
  * `withSizes` = **这颗格子已经有尺寸了**：手势拖出来的（拖多大就是多大）、或者早就
- * 画好的、要编辑的格子。有尺寸就不给尺寸模版，改尺寸用右下角手柄或「位置与尺寸」。
+ * 画好的、要编辑的格子。有尺寸就不给尺寸模版。
  *
- * 只有「＋ 添加格子」是反过来的：它刚落一颗 1×1，尺寸还没定 —— 所以给模版挑，
- * 而位置已经由按钮定好（放在最下面），也就用不着「位置与尺寸」那几个框。
+ * 只有「＋ 添加格子」是反过来的：它刚落一颗 1×1，尺寸还没定 —— 所以给模版挑。
+ *
+ * 「位置与尺寸」那块整块不出现（见 admin.html 的注释）：摆位和改尺寸都靠棋盘上拖拽。
  */
 function openDrawer(id, { withSizes = false } = {}) {
   const cell = state.doc.cells.find((item) => item.id === id);
@@ -716,9 +717,8 @@ function openDrawer(id, { withSizes = false } = {}) {
     scrim.classList.add('is-open');
   });
   fillForm(cell);
-  // 放在 fillForm 后面：它自己也会按布局开关「位置与尺寸」那一块
+  // 放在 fillForm 后面：它按格子类型开关那些块，别被覆盖
   $('field-sizes').hidden = withSizes;
-  if (!withSizes) $('fs-pos').hidden = true;
   renderPreview();
 }
 

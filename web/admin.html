@@ -296,7 +296,12 @@
           </div>
         </fieldset>
 
-        <fieldset class="fieldset" id="fs-pos">
+        <!--
+          位置与尺寸：整块 hidden，界面上不出现 —— 摆位和改尺寸都靠棋盘上拖拽。
+          但四个输入框必须留在 DOM 里：fillPosFields() 往里写、applyForm() 从里读，
+          抽屉里任何一次改动都会经过它们。
+        -->
+        <fieldset class="fieldset" id="fs-pos" hidden>
           <legend>位置与尺寸</legend>
           <div class="grid-2">
             <div class="field">
