@@ -123,9 +123,10 @@ dataset.inset = `${clientLeft + padX + centered},${clientTop + padY}`;
 legal(rect, exceptId) = 宽高 ≥ 1 && 在列范围内 && 不压到别的格子
 ```
 
-- **触屏上「按住 0.5 秒」才算拖拽**（鼠标按下去就拖）：默认的「按住即拖」在手机上太容易误触 ——
-  想点开编辑、想滑动页面，指头一动就把格子挪了。按住期间指头滑动超过 12px 就取消；
-  右下角手柄不受限制（明确的抓取点）。这段逻辑在 `board.js` 的 `armHold/HOLD_MS`。
+- **触屏和鼠标是同一套手势**：按住拖动 = 移动，轻点 = 打开编辑，区别只在指头有没有移动
+  （`drag.moved` 只认「跨了格子」，所以小于一格的抖动不会真的挪动格子，那次点击仍算轻点）。
+  触摸指针带隐式捕获，**别**在 pointerdown 就 setPointerCapture，也**别**把 lostpointercapture
+  当取消（见坑表）——这两条都只在真机上才暴露。
 - **手势结束前不改文档**：拖动只移动 ghost，落点合法才 touch 数据。
   否则每一帧都会重建格子，内嵌 iframe 和图片会不停重载。
 - **监听在 window 上，不在棋盘上。** pointerdown 挂在棋盘（`root`），但一旦开始手势，

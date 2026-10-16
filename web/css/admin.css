@@ -385,15 +385,7 @@
   opacity: 1;
 }
 
-/* 长按够 1 秒、进入拖拽模式的那一下：抬起来一点，让人知道"抓住了" */
-.slot.is-armed {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 12px;
-  transform: scale(1.04);
-}
-
-/* 触屏上按住多久算拖拽的提示（只有触屏设备看得到） */
+/* 只在触屏设备上出现的提示（鼠标端这些话没意义） */
 .only-touch {
   display: none;
 }
