@@ -182,9 +182,21 @@
 /* 触屏没有 hover：常显，否则永远点不到 */
 @media (hover: none) {
   .cell__expand {
+    width: 34px;
+    height: 34px;
     opacity: 1;
     transform: none;
     pointer-events: auto;
+  }
+
+  .cell__expand::before {
+    top: 9px;
+    right: 9px;
+  }
+
+  .cell__expand::after {
+    left: 9px;
+    bottom: 9px;
   }
 }
 
@@ -360,11 +372,10 @@ body.is-fullscreen {
 }
 
 /* tap support on touch screens */
-@media (hover: none) {
-  .cell__caption {
-    display: none;
-  }
-}
+/*
+ * 触屏也显示角标文字：原来这里整块 display: none，手机上就永远看不到格子的名字了。
+ * 角标本来就常显，和设备有没有 hover 无关。
+ */
 
 /* ----------------------------------------------------------------- states */
 

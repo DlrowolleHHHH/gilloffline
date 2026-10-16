@@ -213,30 +213,60 @@ grid.addEventListener('keydown', (event) => {
     expand.getBoundingClientRect());
 });
 
-// Touch devices have no hover: tap a cell once to open its detail panel.
+/*
+ * 点击格子的几条路。桌面上靠 hover / click 分开，触屏没有 hover，只能靠「点几次」：
+ *
+ *   有悬浮详情   → 第一次点先把详情弹出来（相当于桌面上的悬浮），
+ *                  再点一次才真的「进去」：跳链接或全屏展开嵌入的页面；
+ *                  只有详情、没处可去的话，再点一次就是收起。
+ *   没有详情     → 一点直接进去，和以前一样。
+ *   放大角标     → 不管有没有详情、是不是触屏，点了就全屏展开（它是明确的按钮）。
+ *   点空白处     → 收起所有详情。
+ *
+ * 鼠标端保持原样：hover 看详情，单击进去。
+ */
+const closeOpenCells = () =>
+  document.querySelectorAll('.cell.is-open').forEach((other) => other.classList.remove('is-open'));
+
 grid.addEventListener('click', (event) => {
   const cell = event.target.closest('.cell');
-  if (!cell) return;
-  // 嵌入了页面的格子：点一下（或点右下角那个放大角标）全屏展开。
-  // 格子可能同时是 <a>（配了链接），先拦下跳转。
-  if (cell.dataset.fullscreen) {
-    event.preventDefault();
-    // 角标在「网页封面」上是浮在 iframe 之上的，那儿只有它点得到
-    openFullscreen(
-      cell.dataset.fullscreen,
-      cell.querySelector('.cell__caption')?.textContent || '',
-      (event.target.closest('.cell__expand') || cell).getBoundingClientRect()
-    );
+  if (!cell) {
+    closeOpenCells(); // 点到卡片之间的空隙
     return;
   }
-  if (!cell.querySelector('.cell__overlay')) return;
-  if (window.matchMedia('(hover: none)').matches) {
-    if (!cell.classList.contains('is-open')) {
-      event.preventDefault();
-      document.querySelectorAll('.cell.is-open').forEach((other) => other.classList.remove('is-open'));
-      cell.classList.add('is-open');
-    }
+  // touch：没有 hover。用 pointer 能力判断，别用宽度 —— 横屏的手机照样没有 hover
+  const touch = window.matchMedia('(hover: none)').matches;
+  const fullscreen = cell.dataset.fullscreen || '';
+  const badge = event.target.closest('.cell__expand');
+
+  // 放大角标是明确的「全屏」按钮；鼠标点这种格子也直接展开（详情已经由 hover 看过了）
+  if (fullscreen && (badge || !touch)) {
+    event.preventDefault();
+    closeOpenCells();
+    openFullscreen(fullscreen, cell.querySelector('.cell__caption')?.textContent || '',
+      (badge || cell).getBoundingClientRect());
+    return;
   }
+
+  if (!touch) return; // 鼠标：链接交给浏览器跳转，详情由 hover 负责
+
+  const isOpen = cell.classList.contains('is-open');
+  if (cell.querySelector('.cell__overlay') && !isOpen) {
+    // 先看详情。拦掉默认行为，免得顺手把链接点走了
+    event.preventDefault();
+    closeOpenCells();
+    cell.classList.add('is-open');
+    return;
+  }
+  if (fullscreen) {
+    event.preventDefault();
+    closeOpenCells();
+    openFullscreen(fullscreen, cell.querySelector('.cell__caption')?.textContent || '',
+      cell.getBoundingClientRect());
+    return;
+  }
+  if (cell.tagName === 'A') return; // 有链接：这一次就交给浏览器
+  if (isOpen) cell.classList.remove('is-open'); // 只有详情：再点一次收起
 });
 
 boot();
