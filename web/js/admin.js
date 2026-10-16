@@ -246,12 +246,22 @@ function bindSitePanel() {
 
 const boardEl = $('board');
 
+/**
+ * 抽屉已经开着这颗格子，就别再开一遍：重新走 `openDrawer` 会用默认参数，
+ * 把「＋ 添加格子」那条路设好的抽屉状态（尺寸模版 / 位置与尺寸）冲掉。
+ * 关掉抽屉再点它，照旧是完整的编辑器。
+ */
+const openDrawerUnlessCurrent = (id, options) => {
+  if (state.editingId !== id) openDrawer(id, options);
+};
+
 const board = createBoard({
   root: boardEl,
-  onEdit: (id) => openDrawer(id),
+  // 编辑已有的格子：它已经有尺寸了
+  onEdit: (id) => openDrawerUnlessCurrent(id, { withSizes: true }),
   onDuplicate: (id) => duplicateCell(id),
   onRemove: (id) => removeCell(id),
-  onSelect: (id) => openDrawer(id),
+  onSelect: (id) => openDrawerUnlessCurrent(id, { withSizes: true }),
   // a move or a resize has already patched its own slot, so there is nothing to
   // re-render here — just remember that the document is unsaved
   onChange: () => markDirty(),
@@ -365,7 +375,7 @@ function bindBoard() {
       state.doc.cells.push(cell);
       markDirty();
       renderBoard();
-      openDrawer(cell.id);
+      openDrawer(cell.id, { withSizes: true }); // 手势画出来的，尺寸已经定了
       board.select(cell.id);
     },
   });
@@ -436,6 +446,22 @@ function readColorPicker(picker, text, fallback) {
   return HEX.test(text.value.trim()) ? text.value.trim() : picker.value || fallback;
 }
 
+/**
+ * 把格子的位置/尺寸写进「位置与尺寸」那四个框。
+ *
+ * 改完 `cell.pos` 一定要顺手调它：`applyForm()` 是从这几个框**往回读**的，
+ * 框里还是旧值的话，下一步 `onEdited()` 就把刚改好的尺寸覆盖回去了
+ * （点尺寸模版没反应，就是踩的这个）。
+ */
+function fillPosFields(cell) {
+  const units = cellUnits(cell);
+  const pos = cell.pos || { x: 0, y: 0 };
+  els.posX.value = String(pos.x);
+  els.posY.value = String(pos.y);
+  els.posW.value = String(units.w);
+  els.posH.value = String(units.h);
+}
+
 function buildSizeOptions() {
   els.sizes.replaceChildren();
   for (const key of SIZE_ORDER) {
@@ -474,6 +500,7 @@ function buildSizeOptions() {
         const fits = wanted.x + wanted.w <= boardCols() && rectFree(others, wanted);
         cell.pos = fits ? wanted : firstFreeSpot(others, boardCols(), size.w, size.h);
       }
+      fillPosFields(cell); // 否则 onEdited → applyForm 会按旧值把尺寸写回去
       syncSizeButtons();
       onEdited();
     });
@@ -526,12 +553,7 @@ function fillForm(cell) {
   setColorPicker(els.ovFg, els.ovFgText, cell.overlay.textColor);
   els.link.value = cell.link;
 
-  const units = cellUnits(cell);
-  const pos = cell.pos || { x: 0, y: 0 };
-  els.posX.value = String(pos.x);
-  els.posY.value = String(pos.y);
-  els.posW.value = String(units.w);
-  els.posH.value = String(units.h);
+  fillPosFields(cell);
 
   const thumbWrap = $('thumb-current');
   if (cell.image) {
@@ -677,16 +699,16 @@ function renderPreview() {
 /**
  * 打开抽屉。
  *
- * `withSizes` 只有「＋ 添加格子」那条路会传 true：尺寸选择器是给**新建一颗格子**
- * 用的。手势画出来的尺寸由拖拽决定、编辑已有的格子则用右下角手柄或「位置与尺寸」
- * 里的宽高，所以那两种情况下不显示它——尺寸选择器不再因为你「怎么打开抽屉」而
- * 时有时无地出现。
+ * `withSizes` = **这颗格子已经有尺寸了**：手势拖出来的（拖多大就是多大）、或者早就
+ * 画好的、要编辑的格子。有尺寸就不给尺寸模版，改尺寸用右下角手柄或「位置与尺寸」。
+ *
+ * 只有「＋ 添加格子」是反过来的：它刚落一颗 1×1，尺寸还没定 —— 所以给模版挑，
+ * 而位置已经由按钮定好（放在最下面），也就用不着「位置与尺寸」那几个框。
  */
 function openDrawer(id, { withSizes = false } = {}) {
   const cell = state.doc.cells.find((item) => item.id === id);
   if (!cell) return;
   state.editingId = id;
-  $('field-sizes').hidden = !withSizes;
   drawer.hidden = false;
   scrim.hidden = false;
   requestAnimationFrame(() => {
@@ -694,6 +716,9 @@ function openDrawer(id, { withSizes = false } = {}) {
     scrim.classList.add('is-open');
   });
   fillForm(cell);
+  // 放在 fillForm 后面：它自己也会按布局开关「位置与尺寸」那一块
+  $('field-sizes').hidden = withSizes;
+  if (!withSizes) $('fs-pos').hidden = true;
   renderPreview();
 }
 
@@ -1365,8 +1390,8 @@ function bindToolbar() {
     state.doc.cells.push(cell);
     markDirty();
     renderBoard();
-    // 只有这条路会显示尺寸选择器：先落成 1×1，在抽屉里点个预设就变那么大
-    openDrawer(cell.id, { withSizes: true });
+    // 它是唯一「尺寸还没定」的入口：先落 1×1，在抽屉里点个模版就变那么大（位置不用调）
+    openDrawer(cell.id);
     board.select(cell.id);
     drawer.querySelector('.drawer__body').scrollTop = 0;
     // 它在最下面，滚进视野——关掉抽屉就能看见
