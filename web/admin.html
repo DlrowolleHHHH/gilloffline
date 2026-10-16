@@ -352,6 +352,9 @@
             <button class="btn btn--ghost" id="btn-open-embed" type="button">新标签页打开</button>
             <input type="file" id="upload-file-embed" accept=".html,.htm,text/html" hidden />
           </div>
+          <p class="hint hint--warn" id="embed-link-note" hidden>
+            和上面「链接」互斥：两者都绑在格子的点击上，只能填一个。
+          </p>
           <p class="hint">
             和封面是两回事：封面照旧是图片 / 纯色 / 网页，这里再嵌一个可以点开的页面（比如一个小工具）。
             填了之后，鼠标移到格子上时右下角会浮出放大角标，点格子或角标就**全屏展开**这个页面 ——
@@ -438,6 +441,9 @@
               填 <code>/admin</code> 就是「管理页入口」——主页上会自动带上当前用户的 userid，
               站主点进 /admin，子管理员点进自己的 /admin?userid=…。<code>/editor</code>（创作工具）同理，
               <code>/user</code>（登录页）也认。
+            </p>
+            <p class="hint hint--warn" id="link-embed-note" hidden>
+              和下面「嵌入的 HTML」互斥：两者都绑在格子的点击上，只能填一个。
             </p>
           </div>
         </fieldset>

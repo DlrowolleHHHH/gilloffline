@@ -41,6 +41,11 @@
   color: #ffb4b6;
 }
 
+/* 抽屉里那种「两个设置互斥」的提示，比普通 hint 显眼一点 */
+.hint--warn {
+  color: #ffb4b6;
+}
+
 /* 登录卡底部的「返回主页」 */
 .login-card__back {
   margin: 16px 0 0;

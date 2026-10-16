@@ -533,6 +533,7 @@ function fillForm(cell) {
   setColorPicker(els.ovBg, els.ovBgText, cell.overlay.bgColor);
   setColorPicker(els.ovFg, els.ovFgText, cell.overlay.textColor);
   els.link.value = cell.link;
+  syncLinkEmbedExclusion();
 
   const thumbWrap = $('thumb-current');
   if (cell.image) {
@@ -545,6 +546,26 @@ function fillForm(cell) {
 
   syncSizeButtons();
   syncTypeVisibility();
+}
+
+/**
+ * 「链接」和「嵌入的 HTML」互斥：两者都绑在格子的点击上，同时填必然有一个失效。
+ *
+ * 一个填了就禁掉另一个（清空后自动恢复），但**不清空**已经填好的地址 —— 留在框里，
+ * 清掉占位的那一个它就重新生效。数据层面照同一条规则：applyForm 只写没被禁掉的那个，
+ * 所以存下来的永远只有一个（导入/手改的数据里两个都有时，渲染以嵌入的页面为准）。
+ */
+function syncLinkEmbedExclusion() {
+  const hasLink = els.link.value.trim() !== '';
+  const hasEmbed = els.embed.value.trim() !== '';
+  // 两个都有时（导入或手改的数据）以嵌入的页面为准 —— 和渲染时的取舍一致，
+  // 别把两个都禁掉：那样 applyForm 会把两边都写成空，等于静默丢数据。
+  els.link.disabled = hasEmbed;
+  els.embed.disabled = hasLink && !hasEmbed;
+  $('btn-upload-embed').disabled = hasLink;
+  $('btn-open-embed').disabled = hasLink;
+  $('link-embed-note').hidden = !(hasLink || hasEmbed);
+  $('embed-link-note').hidden = !(hasLink || hasEmbed);
 }
 
 function syncTypeVisibility() {
@@ -565,7 +586,8 @@ function applyForm() {
   cell.borderColor = readColorPicker(els.borderColor, els.borderColorText, '#7e46b9');
   cell.image = els.image.value.trim();
   cell.html = els.html.value.trim();
-  cell.embed = els.embed.value.trim();
+  // 互斥：被禁掉的那个（另一个填了）不写进数据
+  cell.embed = els.embed.disabled ? '' : els.embed.value.trim();
   cell.imageFit = els.fit.value;
   cell.imageTitle = els.imageTitle.value;
   cell.imageTitleColor = readColorPicker(els.imageTitleColor, els.imageTitleColorText, '#ffffff');
@@ -579,12 +601,13 @@ function applyForm() {
     bgColor: readColorPicker(els.ovBg, els.ovBgText, '#0b0a12f2'),
     textColor: readColorPicker(els.ovFg, els.ovFgText, '#ffffff'),
   };
-  cell.link = els.link.value.trim();
+  cell.link = els.link.disabled ? '' : els.link.value.trim();
   // 位置和尺寸不在这里改：抽屉里没有那一栏，摆位靠拖拽（board.js 的 legal()）、
   // 尺寸靠拖右下角手柄或「尺寸」模版 —— 各自都带校验，这里不碰 cell.pos。
 }
 
 function onEdited() {
+  syncLinkEmbedExclusion();
   applyForm();
   renderPreview();
   const cell = currentCell();
