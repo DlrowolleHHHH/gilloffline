@@ -341,31 +341,6 @@
           </p>
         </fieldset>
 
-        <fieldset class="fieldset" id="fs-embed">
-          <legend>嵌入的 HTML（所有类型都能有）</legend>
-          <div class="field">
-            <label for="ed-embed">页面地址</label>
-            <input class="input" id="ed-embed" type="text" spellcheck="false" placeholder="/pages/xxx.html 或 https://…" />
-          </div>
-          <div class="upload-picker">
-            <button class="btn" id="btn-upload-embed" type="button">上传 HTML 文件</button>
-            <button class="btn btn--ghost" id="btn-open-embed" type="button">新标签页打开</button>
-            <input type="file" id="upload-file-embed" accept=".html,.htm,text/html" hidden />
-          </div>
-          <p class="hint hint--warn" id="embed-link-note" hidden>
-            和上面「链接」互斥：两者都绑在格子的点击上，只能填一个。
-          </p>
-          <p class="hint">
-            和封面是两回事：封面照旧是图片 / 纯色 / 网页，这里再嵌一个可以点开的页面（比如一个小工具）。
-            填了之后，鼠标移到格子上时右下角会浮出放大角标，点格子或角标就**全屏展开**这个页面 ——
-            页面平时不加载，关掉之后它里面的脚本也随之停下。
-          </p>
-          <p class="hint">
-            上传的页面存在数据目录里，重新部署不会丢。页面在沙箱里运行：可以用 JavaScript，
-            但读不到本站的登录状态、调不了本站接口，也影响不到外层页面。
-          </p>
-        </fieldset>
-
         <fieldset class="fieldset" id="fs-caption">
           <legend>角标文字</legend>
           <div class="field">
@@ -433,17 +408,45 @@
         </fieldset>
 
         <fieldset class="fieldset">
-          <legend>链接</legend>
-          <div class="field">
-            <label for="ed-link">点击后跳转（可留空）</label>
-            <input class="input" id="ed-link" type="text" spellcheck="false" placeholder="https://github.com/…" />
+          <legend>点击这个格子时</legend>
+          <div class="segmented" role="tablist" aria-label="点击行为">
+            <button class="segmented__btn" type="button" id="tab-link" data-action="link" role="tab">跳转链接</button>
+            <button class="segmented__btn" type="button" id="tab-embed" data-action="embed" role="tab">嵌入 HTML</button>
+          </div>
+          <p class="hint">
+            两者互斥：都绑在格子的点击上，只能选一个。切换按钮会把另一边的地址清掉。
+          </p>
+
+          <div class="action-panel" id="panel-link">
+            <div class="field">
+              <label for="ed-link">点击后跳转（可留空）</label>
+              <input class="input" id="ed-link" type="text" spellcheck="false" placeholder="https://github.com/…" />
+              <p class="hint">
+                填 <code>/admin</code> 就是「管理页入口」——主页上会自动带上当前用户的 userid，
+                站主点进 /admin，子管理员点进自己的 /admin?userid=…。<code>/editor</code>（创作工具）同理，
+                <code>/user</code>（登录页）也认。
+              </p>
+            </div>
+          </div>
+
+          <div class="action-panel" id="panel-embed" hidden>
+            <div class="field">
+              <label for="ed-embed">页面地址</label>
+              <input class="input" id="ed-embed" type="text" spellcheck="false" placeholder="/pages/xxx.html 或 https://…" />
+            </div>
+            <div class="upload-picker">
+              <button class="btn" id="btn-upload-embed" type="button">上传 HTML 文件</button>
+              <button class="btn btn--ghost" id="btn-open-embed" type="button">新标签页打开</button>
+              <input type="file" id="upload-file-embed" accept=".html,.htm,text/html" hidden />
+            </div>
             <p class="hint">
-              填 <code>/admin</code> 就是「管理页入口」——主页上会自动带上当前用户的 userid，
-              站主点进 /admin，子管理员点进自己的 /admin?userid=…。<code>/editor</code>（创作工具）同理，
-              <code>/user</code>（登录页）也认。
+              和封面是两回事：封面照旧是图片 / 纯色 / 网页，这里再嵌一个可以点开的页面（比如一个小工具）。
+              填了之后，鼠标移到格子上时右下角会浮出放大角标，点格子或角标就<strong>全屏展开</strong>这个页面 ——
+              页面平时不加载，关掉之后它里面的脚本也随之停下。
             </p>
-            <p class="hint hint--warn" id="link-embed-note" hidden>
-              和下面「嵌入的 HTML」互斥：两者都绑在格子的点击上，只能填一个。
+            <p class="hint">
+              上传的页面存在数据目录里，重新部署不会丢。页面在沙箱里运行：可以用 JavaScript，
+              但读不到本站的登录状态、调不了本站接口，也影响不到外层页面。
             </p>
           </div>
         </fieldset>

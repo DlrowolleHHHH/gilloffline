@@ -41,9 +41,42 @@
   color: #ffb4b6;
 }
 
-/* 抽屉里那种「两个设置互斥」的提示，比普通 hint 显眼一点 */
-.hint--warn {
-  color: #ffb4b6;
+/* 抽屉里的互斥选项：并排两个按钮，选中的那个点亮，下面的内容面板跟着切 */
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--ink-900);
+}
+
+.segmented__btn {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+
+.segmented__btn:hover {
+  color: var(--text);
+}
+
+.segmented__btn.is-on {
+  background: color-mix(in srgb, var(--accent) 30%, var(--ink-700));
+  color: var(--text);
+}
+
+.action-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* 登录卡底部的「返回主页」 */
