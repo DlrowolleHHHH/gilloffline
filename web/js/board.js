@@ -103,12 +103,12 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
 
   /**
    * 触屏上默认「按住就拖」太容易误触发：想点开编辑、想滚动页面，指头一动就把格子挪了。
-   * 改成**按住 1 秒进入拖拽模式**：短按还是点开格子；按住期间指头抖动超过 HOLD_SLOP
+   * 改成**按住 0.5 秒进入拖拽模式**：短按还是点开格子；按住期间指头抖动超过 HOLD_SLOP
    * 就当用户在滑动，不进入拖拽。
    *
    * 右下角手柄不受这个限制 —— 它是明确的「抓取点」，按下去就是要改尺寸。
    */
-  const HOLD_MS = 1000;
+  const HOLD_MS = 500;
   const HOLD_SLOP = 12;
 
   let hold = null;
@@ -174,7 +174,7 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
         offsetX: clamp(grab.x - pos.x, 0, Math.max(0, (pos.w || 1) - 1)),
         offsetY: clamp(grab.y - pos.y, 0, Math.max(0, (pos.h || 1) - 1)),
       };
-      // 触屏：按住 1 秒才算拖拽；鼠标照旧按下去就拖
+      // 触屏：按住 0.5 秒才算拖拽；鼠标照旧按下去就拖
       if (event.pointerType === 'touch') armHold(event, info);
       else startDrag(event, info);
       return;
