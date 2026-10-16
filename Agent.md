@@ -127,11 +127,11 @@ legal(rect, exceptId) = 宽高 ≥ 1 && 在列范围内 && 不压到别的格子
   （`drag.moved` 只认「跨了格子」，所以小于一格的抖动不会真的挪动格子，那次点击仍算轻点）。
   触摸指针带隐式捕获，**别**在 pointerdown 就 setPointerCapture，也**别**把 lostpointercapture
   当取消（见坑表）——这两条都只在真机上才暴露。
-- **触屏拖拽延时（`setHoldDelay(ms)`）**：`0` = 按下去就进拖拽（默认），大于 0 时按住够时间才进，
-  按住期间指头移动超过 12px 就取消（那是在滑页面）。它由管理页工具条的输入框喂进来，
-  **不进 `site.json`**（同「缩放」：一次打开的偏好）。定时器到点时先喊 `onArm()`（管理页拿它浮
-  「进入拖拽」），再走 `startDrag` —— 也就是说**手势的两条路（立刻 / 延时后）汇合在同一个 `startDrag`**，
-  别在延时分支里另写一套。
+- **右下角那个方块拖什么，由开关定（`setHandleMode('resize' | 'move')`）**：`resize` 是默认
+  （改大小），`move` 时同一个方块拖的是整颗格子 —— 复用 `moveInfo()`，抓的仍然是那个角，
+  所以落点不会跳。开关在棋盘上方的 `.board-touch-bar` 里，只在 `(hover: none)` 下显示，
+  **不进 `site.json`**（同「缩放」：一次打开的偏好）。它**对所有指针类型生效**：
+  设备同时有鼠标和触屏时，「两边行为一致」比「看是谁按的」更好猜。
 - **触屏不画格子**：`onPointerDown` 走到最后一个分支（空白处 → `kind: 'draw'`）之前，
   `pointerType === 'touch'` 直接 return。空白处的 `touch-action` 是 `auto`（只有 `.board__slot`
   是 `none`），浏览器会把这一手认成滚动并 `pointercancel`，不 return 也只是白搭；
@@ -233,6 +233,7 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 | 15% 时最后两行点不到 | `min-height` 被 `border-box` 吃掉 14px，元素比格线矮 |
 | 缩小后空行里按不动 | 固定 22px 的按钮条溢出格子，隐形但吃掉了点击 |
 | 缩放比例不精确（50% 不是一半） | 用缩放后的 gap 去等分，基准跟着漂 |
+| 点「尺寸」把格子的点击行为改了 | `bindActionTabs()` 原来扫全页的 `.segmented__btn`；棋盘上方新加的那组也是这个类，被一起接上了。**分组控件的选择器要带容器**（现在扫 `#action-tabs`） |
 
 ## 8. 改这块代码之前的检查表
 
@@ -244,4 +245,6 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 - [ ] 服务端仍然会修复重叠/越界，且绝不丢格子？
 - [ ] 窄屏重排还是渲染时派生的（没写数据、没重建 DOM），且档位列数没被喂给 flow？
 - [ ] `padColumns` / `phoneColumns` 的 0（不重排）在读的时候活下来了？
+- [ ] 手势的几个入口（格子本体 / 右下角方块，方块还有两种模式）都还汇到同一个 `startDrag`？
+      新加的分段控件没被抽屉那套 `bindActionTabs` 误接上？
 - [ ] 上面第 6 节那七条断言都跑过？

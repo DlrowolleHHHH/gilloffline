@@ -242,23 +242,24 @@
             </select>
           </label>
 
-          <label class="tool" for="board-delay">
-            <span class="tool__label">拖拽延时</span>
-            <input class="input input--slim tool__number" id="board-delay" type="number" min="0" max="3000" step="50"
-                   value="0" inputmode="numeric"
-                   title="触屏上按住多久才进入拖拽（毫秒）。0 = 按下去就能拖，这是默认值；填大于 0 的数，按住够这么久才进拖拽，方便调手感。只影响你自己浏览器里的编辑视图，不会写进站点数据。" />
-            <span class="tool__label">ms</span>
-          </label>
-
           <span class="hint" id="site-columns-hint" hidden></span>
           <span class="hint admin-toolbar__help">
             在空白处拖动画出格子 · 拖动格子换位置 · 拖右下角的小方块改尺寸 · 单击格子编辑内容
           </span>
         </div>
 
-        <p class="hint board-touch-hint">
-          触屏上按住格子拖动换位置，轻点是打开编辑 · 新建格子请用上面的「＋ 添加格子」按钮
-        </p>
+        <div class="board-touch-bar">
+          <span class="hint">
+            触屏上按住格子拖动换位置，轻点是打开编辑 · 新建格子请用上面的「＋ 添加格子」按钮
+          </span>
+          <span class="tool">
+            <span class="tool__label">右下角方块</span>
+            <span class="segmented" id="handle-mode" role="group" aria-label="拖右下角方块时做什么">
+              <button class="segmented__btn is-on" type="button" data-mode="resize" aria-pressed="true">尺寸</button>
+              <button class="segmented__btn" type="button" data-mode="move" aria-pressed="false">位置</button>
+            </span>
+          </span>
+        </div>
 
         <div class="grid admin-board" id="board"></div>
         <p class="hint board-status" id="board-status" aria-live="polite"></p>
@@ -421,7 +422,7 @@
 
         <fieldset class="fieldset">
           <legend>点击这个格子时</legend>
-          <div class="segmented" role="tablist" aria-label="点击行为">
+          <div class="segmented" id="action-tabs" role="tablist" aria-label="点击行为">
             <button class="segmented__btn" type="button" id="tab-link" data-action="link" role="tab">跳转链接</button>
             <button class="segmented__btn" type="button" id="tab-embed" data-action="embed" role="tab">嵌入 HTML</button>
           </div>

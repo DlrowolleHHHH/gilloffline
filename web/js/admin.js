@@ -369,8 +369,6 @@ function bindBoard() {
       cell.pos = { ...rect };
       board.patch(cell);
     },
-    // 长按够时间、进入拖拽模式：浮一句提示，随即自己消失
-    onArm: () => toast('进入拖拽', 'ok', 900),
     onDraw: (rect) => {
       toBoard();
       const cell = defaultCell({ size: '1x1', pos: { ...rect } });
@@ -391,15 +389,20 @@ function bindBoard() {
   });
 
   /*
-   * 触屏拖拽延时：调手感用的开关，0 = 按下去就能拖（默认）。只活在这次会话里，
-   * 不写进站点数据 —— 它是「这台设备上怎么操作」的偏好，不是站点内容。
-   * 绑定的时候先读一遍：万一浏览器把表单值恢复了（前进后退、会话恢复），
-   * 输入框里显示什么就得是什么。
+   * 右下角那个方块拖起来是改尺寸还是挪位置。触屏专用的开关（那一栏本身只在
+   * (hover: none) 下显示），不写进站点数据 —— 它是「这台设备上怎么操作」的偏好。
+   * 按钮上的 is-on 由这里同步，别在 HTML 里写死状态。
    */
-  const delayInput = $('board-delay');
-  const applyDelay = () => board.setHoldDelay(delayInput.value);
-  delayInput.addEventListener('input', applyDelay);
-  applyDelay();
+  const modeButtons = [...document.querySelectorAll('#handle-mode .segmented__btn')];
+  const setHandleMode = (mode) => {
+    board.setHandleMode(mode);
+    for (const btn of modeButtons) {
+      const on = btn.dataset.mode === mode;
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-pressed', String(on));
+    }
+  };
+  for (const btn of modeButtons) btn.addEventListener('click', () => setHandleMode(btn.dataset.mode));
 
   // the cell size is measured from the panel, so a resize has to re-measure
   window.addEventListener('resize', () => {
@@ -595,7 +598,7 @@ function switchActionTab(next) {
 }
 
 function bindActionTabs() {
-  for (const btn of document.querySelectorAll('.segmented__btn')) {
+  for (const btn of document.querySelectorAll('#action-tabs .segmented__btn')) {
     btn.addEventListener('click', () => switchActionTab(btn.dataset.action));
   }
 }

@@ -388,16 +388,29 @@
 /*
  * 触屏上没法在空白处画格子：棋盘的空白处是 `touch-action: auto`，浏览器会把这一手
  * 当成滚动、随即 pointercancel，手势本来就活不下来。所以新建只能走「＋ 添加格子」，
- * 棋盘上方那句提示也只给触屏看。
+ * 棋盘上方这一栏（提示 + 右下角方块的开关）也只给触屏看。
  */
-.board-touch-hint {
+.board-touch-bar {
   display: none;
-  margin: 0 0 10px;
 }
 
 @media (hover: none) {
-  .board-touch-hint {
-    display: block;
+  .board-touch-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    margin: 0 0 10px;
+  }
+
+  /* 这一栏比鼠标端紧凑：分段按钮是给指头点的，别缩太小 */
+  .board-touch-bar .segmented {
+    padding: 3px;
+  }
+
+  .board-touch-bar .segmented__btn {
+    padding: 7px 14px;
   }
 
   /* 工具条那行是鼠标的操作说明，「在空白处拖动画出格子」「单击」在触屏上都不成立 */
@@ -480,11 +493,6 @@
 
 .admin-toolbar .input--slim {
   padding: 5px 7px;
-}
-
-/* 工具条里唯一的数字输入框：下拉框能自己撑开，它不能 */
-.tool__number {
-  width: 4.4rem;
 }
 
 /* the board instructions take whatever room is left at the end of the row */

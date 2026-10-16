@@ -97,51 +97,37 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
     if (status) status.textContent = message;
   };
 
-  /* ---------------------------------------------------------- 触屏拖拽延时 */
+  /* ------------------------------------------------- 右下角方块是拖什么 */
 
   /**
-   * 触屏上「按住多久才进入拖拽」，毫秒；0 = 按下去就能拖（默认）。
+   * 右下角那个方块拖起来做什么：`'resize'`（默认，改尺寸）或 `'move'`（挪整颗格子）。
    *
-   * 纯粹是调手感用的开关：由管理页工具栏传进来，不写进站点数据，刷新回 0。
-   * 大于 0 时，按住期间指头移动超过一点就取消（那是在滑动，不该变成拖动）。
+   * 触屏上没有 hover、指头又盖着格子，随手一按根本说不清是想干嘛。所以把「明确的一个
+   * 抓取点」交给棋盘上方的开关来定：它要么改尺寸，要么挪位置。不进站点数据
+   * （同「缩放」：一次打开的偏好，不是站点内容）。
    */
-  let holdDelay = 0;
-  let hold = null;
+  let handleMode = 'resize';
 
-  function clearHold() {
-    if (!hold) return;
-    clearTimeout(hold.timer);
-    window.removeEventListener('pointermove', holdMove);
-    window.removeEventListener('pointerup', clearHold);
-    window.removeEventListener('pointercancel', clearHold);
-    hold = null;
-  }
-
-  function holdMove(event) {
-    if (!hold || event.pointerId !== hold.pointerId) return;
-    // 按住的这段时间里指头挪得太远，就当用户在滑动，这一下不进拖拽
-    if (Math.hypot(event.clientX - hold.x, event.clientY - hold.y) > 12) clearHold();
-  }
-
-  /** 按够了：进入拖拽模式（先喊一声 onArm，管理页拿它弹个提示），再交给正常手势。 */
-  function armHold(event, info) {
-    clearHold();
-    hold = {
-      pointerId: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      timer: setTimeout(() => {
-        clearHold();
-        onArm();
-        startDrag(event, info);
-      }, holdDelay),
-    };
-    window.addEventListener('pointermove', holdMove);
-    window.addEventListener('pointerup', clearHold);
-    window.addEventListener('pointercancel', clearHold);
-  }
+  const handleTitle = () => (handleMode === 'move' ? '拖动挪位置' : '拖动改尺寸');
 
   /* --------------------------------------------------------------- pointer */
+
+  /** 一次「移动」的初始状态：抓着格子里哪一格，拖起来就不跳。 */
+  function moveInfo(cell, event) {
+    const pos = cell.pos || { x: 0, y: 0 };
+    const w = pos.w || 1;
+    const h = pos.h || 1;
+    const grab = unitAt(event);
+    return {
+      kind: 'move',
+      id: cell.id,
+      w,
+      h,
+      // where inside the cell the pointer grabbed it, so it does not jump
+      offsetX: clamp(grab.x - pos.x, 0, Math.max(0, w - 1)),
+      offsetY: clamp(grab.y - pos.y, 0, Math.max(0, h - 1)),
+    };
+  }
 
   function onPointerDown(event) {
     if (event.button !== 0 && event.pointerType === 'mouse') return;
@@ -150,28 +136,17 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
 
     const slot = event.target.closest('.slot');
     const handle = event.target.closest('.slot__handle');
+    const cell = slot ? cells.find((item) => item.id === slot.dataset.id) : null;
+    if (slot && !cell) return;
 
-    if (handle && slot) {
-      startDrag(event, { kind: 'resize', id: slot.dataset.id, origin: pointOf(slot.dataset.id) });
+    if (handle && cell) {
+      // 方块默认改尺寸；开关切到「位置」就改成拖整颗格子（抓的还是那个角，位置不跳）
+      if (handleMode === 'move') startDrag(event, moveInfo(cell, event));
+      else startDrag(event, { kind: 'resize', id: cell.id, origin: pointOf(cell.id) });
       return;
     }
-    if (slot) {
-      const cell = cells.find((item) => item.id === slot.dataset.id);
-      if (!cell) return;
-      const pos = cell.pos || { x: 0, y: 0 };
-      const grab = unitAt(event);
-      const info = {
-        kind: 'move',
-        id: cell.id,
-        w: pos.w || 1,
-        h: pos.h || 1,
-        // where inside the cell the pointer grabbed it, so it does not jump
-        offsetX: clamp(grab.x - pos.x, 0, Math.max(0, (pos.w || 1) - 1)),
-        offsetY: clamp(grab.y - pos.y, 0, Math.max(0, (pos.h || 1) - 1)),
-      };
-      // 触屏且设了延时：先按住等够时间；鼠标、或者延时为 0，按下去就能拖
-      if (event.pointerType === 'touch' && holdDelay > 0) armHold(event, info);
-      else startDrag(event, info);
+    if (cell) {
+      startDrag(event, moveInfo(cell, event));
       return;
     }
 
@@ -245,7 +220,6 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   }
 
   function onPointerUp(event) {
-    clearHold();
     if (!drag) return;
     stopListening();
     const { kind, id, rect, moved, captured } = drag;
@@ -292,7 +266,6 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   }
 
   const onPointerCancel = () => {
-    clearHold();
     if (!drag) return;
     stopListening();
     drag = null;
@@ -331,7 +304,7 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
 
     const handle = document.createElement('span');
     handle.className = 'slot__handle';
-    handle.title = '拖动改尺寸';
+    handle.title = handleTitle();
     handle.setAttribute('aria-hidden', 'true');
     slot.append(handle);
 
@@ -402,13 +375,10 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   /* -------------------------------------------------------------- plumbing */
 
   let onCreate = () => {};
-  /** 按住够时长、进入拖拽模式时喊一声（管理页拿它弹个提示）。 */
-  let onArm = () => {};
 
-  function bind({ onDraw, onPlace: onPlaceCb, onArm: onArmCb } = {}) {
+  function bind({ onDraw, onPlace: onPlaceCb } = {}) {
     onCreate = onDraw || (() => {});
     onPlace = onPlaceCb || (() => {});
-    onArm = onArmCb || (() => {});
     // only the start: from there the gesture follows the pointer on the window
     root.addEventListener('pointerdown', onPointerDown);
     /*
@@ -493,10 +463,13 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
     setColumns: (value) => {
       columns = value;
     },
-    /** 触屏拖拽延时（毫秒，0 = 直接拖）。管理页工具栏上那个调试开关。 */
-    setHoldDelay: (ms) => {
-      holdDelay = Math.max(0, Number(ms) || 0);
-      clearHold();
+    /**
+     * 右下角方块拖起来做什么：`'resize'`（默认）或 `'move'`。
+     * 管理页棋盘的「尺寸 / 位置」开关调它；顺手把方块上的提示也换掉。
+     */
+    setHandleMode: (mode) => {
+      handleMode = mode === 'move' ? 'move' : 'resize';
+      root.querySelectorAll('.slot__handle').forEach((node) => (node.title = handleTitle()));
     },
   };
 }
