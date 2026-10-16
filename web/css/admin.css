@@ -385,6 +385,17 @@
   opacity: 1;
 }
 
+/* 触屏上没有 hover，右下角手柄得常显、并且够手指点（鼠标下仍然藏到悬停才出现） */
+@media (hover: none) {
+  .slot__handle {
+    width: 22px;
+    height: 22px;
+    right: -6px;
+    bottom: -6px;
+    opacity: 1;
+  }
+}
+
 .board-status {
   margin-top: 10px;
 }

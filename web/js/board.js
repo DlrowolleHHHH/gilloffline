@@ -351,7 +351,15 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
     onPlace = onPlaceCb || (() => {});
     // only the start: from there the gesture follows the pointer on the window
     root.addEventListener('pointerdown', onPointerDown);
-    root.addEventListener('lostpointercapture', onPointerCancel);
+    /*
+     * 这里**不能**监听 lostpointercapture 当作「取消」。
+     *
+     * 触摸指针天生带隐式捕获（指向最先收到 pointerdown 的元素），手势里那句
+     * setPointerCapture 会把隐式捕获顶掉，浏览器随即发出 lostpointercapture ——
+     * 于是一次正常的触摸拖拽会在第一次移动时就"被取消"，永远拖不动（鼠标没有这回事，
+     * 所以本地用鼠标测不出来）。真正该中止手势的是 pointercancel（系统手势抢走指针之类），
+     * 那个仍然听着。
+     */
 
     // clicks: select, then the bar's buttons
     root.addEventListener('click', (event) => {
