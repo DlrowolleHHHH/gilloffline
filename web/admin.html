@@ -18,7 +18,6 @@
       </div>
       <div class="topbar-actions" id="topbar-actions" hidden>
         <span class="dirty-flag" id="dirty-flag" hidden>未保存</span>
-        <button class="btn btn--primary" id="btn-add" type="button">＋ 添加格子</button>
         <button class="btn" id="btn-save" type="button">保存</button>
         <a class="btn btn--ghost" id="link-preview" href="/" target="_blank" rel="noopener">预览主页</a>
         <a class="btn btn--ghost" id="link-editor" href="/editor">创作工具</a>
@@ -196,6 +195,7 @@
 
         <div class="admin-toolbar">
           <strong id="cell-count"></strong>
+          <button class="btn btn--primary" id="btn-add" type="button">＋ 添加格子</button>
 
           <label class="tool" for="site-columns">
             <span class="tool__label">列数</span>
@@ -273,7 +273,7 @@
               <option value="solid">纯色格子</option>
             </select>
           </div>
-          <div class="field">
+          <div class="field" id="field-sizes">
             <label>尺寸</label>
             <div class="size-picker" id="ed-sizes"></div>
           </div>

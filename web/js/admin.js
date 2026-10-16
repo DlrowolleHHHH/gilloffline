@@ -674,10 +674,19 @@ function renderPreview() {
   });
 }
 
-function openDrawer(id) {
+/**
+ * 打开抽屉。
+ *
+ * `withSizes` 只有「＋ 添加格子」那条路会传 true：尺寸选择器是给**新建一颗格子**
+ * 用的。手势画出来的尺寸由拖拽决定、编辑已有的格子则用右下角手柄或「位置与尺寸」
+ * 里的宽高，所以那两种情况下不显示它——尺寸选择器不再因为你「怎么打开抽屉」而
+ * 时有时无地出现。
+ */
+function openDrawer(id, { withSizes = false } = {}) {
   const cell = state.doc.cells.find((item) => item.id === id);
   if (!cell) return;
   state.editingId = id;
+  $('field-sizes').hidden = !withSizes;
   drawer.hidden = false;
   scrim.hidden = false;
   requestAnimationFrame(() => {
@@ -1347,14 +1356,21 @@ async function importJson(file) {
 function bindToolbar() {
   $('btn-add').addEventListener('click', () => {
     toBoard();
-    const rects = state.doc.cells.map(rectOf).filter(Boolean);
-    const cell = defaultCell({ overlay: defaultOverlay(), pos: firstFreeSpot(rects, boardCols(), 1, 1) });
+    // 放在最下面：所有格子的下边缘里最靠下的那一行（那一整行必然是空的）
+    const bottom = state.doc.cells.reduce(
+      (max, cell) => (cell.pos ? Math.max(max, cell.pos.y + cell.pos.h) : max),
+      0
+    );
+    const cell = defaultCell({ overlay: defaultOverlay(), pos: { x: 0, y: bottom, w: 1, h: 1 } });
     state.doc.cells.push(cell);
     markDirty();
     renderBoard();
-    openDrawer(cell.id);
+    // 只有这条路会显示尺寸选择器：先落成 1×1，在抽屉里点个预设就变那么大
+    openDrawer(cell.id, { withSizes: true });
     board.select(cell.id);
     drawer.querySelector('.drawer__body').scrollTop = 0;
+    // 它在最下面，滚进视野——关掉抽屉就能看见
+    boardEl.querySelector(`.slot[data-id="${CSS.escape(cell.id)}"]`)?.scrollIntoView({ block: 'nearest' });
   });
   $('btn-save').addEventListener('click', save);
   $('btn-export').addEventListener('click', exportJson);
