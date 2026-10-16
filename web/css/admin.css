@@ -385,6 +385,25 @@
   opacity: 1;
 }
 
+/* 长按够 1 秒、进入拖拽模式的那一下：抬起来一点，让人知道"抓住了" */
+.slot.is-armed {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 12px;
+  transform: scale(1.04);
+}
+
+/* 触屏上按住多久算拖拽的提示（只有触屏设备看得到） */
+.only-touch {
+  display: none;
+}
+
+@media (hover: none) {
+  .only-touch {
+    display: inline;
+  }
+}
+
 /* 触屏上没有 hover，右下角手柄得常显、并且够手指点（鼠标下仍然藏到悬停才出现） */
 @media (hover: none) {
   .slot__handle {

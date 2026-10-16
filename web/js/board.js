@@ -99,6 +99,55 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
 
   /* --------------------------------------------------------------- pointer */
 
+  /* -------------------------------------------------------------- 长按进入拖拽 */
+
+  /**
+   * 触屏上默认「按住就拖」太容易误触发：想点开编辑、想滚动页面，指头一动就把格子挪了。
+   * 改成**按住 1 秒进入拖拽模式**：短按还是点开格子；按住期间指头抖动超过 HOLD_SLOP
+   * 就当用户在滑动，不进入拖拽。
+   *
+   * 右下角手柄不受这个限制 —— 它是明确的「抓取点」，按下去就是要改尺寸。
+   */
+  const HOLD_MS = 1000;
+  const HOLD_SLOP = 12;
+
+  let hold = null;
+
+  function clearHold() {
+    if (!hold) return;
+    clearTimeout(hold.timer);
+    window.removeEventListener('pointermove', holdMove);
+    window.removeEventListener('pointerup', clearHold);
+    window.removeEventListener('pointercancel', clearHold);
+    hold = null;
+  }
+
+  function holdMove(event) {
+    if (!hold || event.pointerId !== hold.pointerId) return;
+    const far = Math.hypot(event.clientX - hold.x, event.clientY - hold.y) > HOLD_SLOP;
+    if (far) clearHold(); // 在滑动：这一下不进入拖拽
+  }
+
+  /** 按住够了：进入拖拽模式，给一点触感 + 视觉反馈再交给正常的手势逻辑。 */
+  function armHold(event, info) {
+    clearHold();
+    hold = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      timer: setTimeout(() => {
+        clearHold();
+        const slot = root.querySelector(`.slot[data-id="${CSS.escape(info.id)}"]`);
+        if (slot) slot.classList.add('is-armed');
+        if (navigator.vibrate) navigator.vibrate(12);
+        startDrag(event, info);
+      }, HOLD_MS),
+    };
+    window.addEventListener('pointermove', holdMove);
+    window.addEventListener('pointerup', clearHold);
+    window.addEventListener('pointercancel', clearHold);
+  }
+
   function onPointerDown(event) {
     if (event.button !== 0 && event.pointerType === 'mouse') return;
     // the action buttons are buttons: a press there must not start a drag
@@ -116,7 +165,7 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
       if (!cell) return;
       const pos = cell.pos || { x: 0, y: 0 };
       const grab = unitAt(event);
-      startDrag(event, {
+      const info = {
         kind: 'move',
         id: cell.id,
         w: pos.w || 1,
@@ -124,7 +173,10 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
         // where inside the cell the pointer grabbed it, so it does not jump
         offsetX: clamp(grab.x - pos.x, 0, Math.max(0, (pos.w || 1) - 1)),
         offsetY: clamp(grab.y - pos.y, 0, Math.max(0, (pos.h || 1) - 1)),
-      });
+      };
+      // 触屏：按住 1 秒才算拖拽；鼠标照旧按下去就拖
+      if (event.pointerType === 'touch') armHold(event, info);
+      else startDrag(event, info);
       return;
     }
 
@@ -190,6 +242,7 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   }
 
   function onPointerUp(event) {
+    clearHold();
     if (!drag) return;
     stopListening();
     const { kind, id, rect, moved, captured } = drag;
@@ -201,7 +254,9 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
       }
     }
     root.classList.remove('is-dragging');
-    root.querySelectorAll('.slot.is-dragging').forEach((slot) => slot.classList.remove('is-dragging'));
+    root.querySelectorAll('.slot.is-dragging, .slot.is-armed').forEach((slot) => {
+      slot.classList.remove('is-dragging', 'is-armed');
+    });
     hideGhost();
     drag = null;
     // only a real drag should swallow the click that follows it — a plain click
@@ -236,12 +291,15 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   }
 
   const onPointerCancel = () => {
+    clearHold();
     if (!drag) return;
     stopListening();
     drag = null;
     hideGhost();
     root.classList.remove('is-dragging');
-    root.querySelectorAll('.slot.is-dragging').forEach((slot) => slot.classList.remove('is-dragging'));
+    root.querySelectorAll('.slot.is-dragging, .slot.is-armed').forEach((slot) => {
+      slot.classList.remove('is-dragging', 'is-armed');
+    });
   };
 
   /* ------------------------------------------------------------ rendering */
