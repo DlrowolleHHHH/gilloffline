@@ -385,14 +385,24 @@
   opacity: 1;
 }
 
-/* 只在触屏设备上出现的提示（鼠标端这些话没意义） */
-.only-touch {
+/*
+ * 触屏上没法在空白处画格子：棋盘的空白处是 `touch-action: auto`，浏览器会把这一手
+ * 当成滚动、随即 pointercancel，手势本来就活不下来。所以新建只能走「＋ 添加格子」，
+ * 棋盘上方那句提示也只给触屏看。
+ */
+.board-touch-hint {
   display: none;
+  margin: 0 0 10px;
 }
 
 @media (hover: none) {
-  .only-touch {
-    display: inline;
+  .board-touch-hint {
+    display: block;
+  }
+
+  /* 工具条那行是鼠标的操作说明，「在空白处拖动画出格子」「单击」在触屏上都不成立 */
+  .admin-toolbar__help {
+    display: none;
   }
 }
 

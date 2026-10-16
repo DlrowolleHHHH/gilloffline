@@ -132,6 +132,11 @@ legal(rect, exceptId) = 宽高 ≥ 1 && 在列范围内 && 不压到别的格子
   **不进 `site.json`**（同「缩放」：一次打开的偏好）。定时器到点时先喊 `onArm()`（管理页拿它浮
   「进入拖拽」），再走 `startDrag` —— 也就是说**手势的两条路（立刻 / 延时后）汇合在同一个 `startDrag`**，
   别在延时分支里另写一套。
+- **触屏不画格子**：`onPointerDown` 走到最后一个分支（空白处 → `kind: 'draw'`）之前，
+  `pointerType === 'touch'` 直接 return。空白处的 `touch-action` 是 `auto`（只有 `.board__slot`
+  是 `none`），浏览器会把这一手认成滚动并 `pointercancel`，不 return 也只是白搭；
+  触屏新建走「＋ 添加格子」（落 1×1 在最下面，抽屉里给尺寸模版）。
+  对应的提示是棋盘上方的 `.board-touch-hint`，只在 `(hover: none)` 下显示。
 - **手势结束前不改文档**：拖动只移动 ghost，落点合法才 touch 数据。
   否则每一帧都会重建格子，内嵌 iframe 和图片会不停重载。
 - **监听在 window 上，不在棋盘上。** pointerdown 挂在棋盘（`root`），但一旦开始手势，

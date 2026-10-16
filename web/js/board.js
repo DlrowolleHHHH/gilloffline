@@ -175,6 +175,14 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
       return;
     }
 
+    /*
+     * 触屏上不在空白处画格子。空白处的 `touch-action` 是 `auto`（只有格子上是 none），
+     * 浏览器会把这一手认成滚动、随即 pointercancel，手势本来就活不下来；就算按住不动，
+     * 指头也画不准。触屏新建走棋盘上方的「＋ 添加格子」——落一颗 1×1 在最下面，再挑尺寸。
+     * 鼠标照旧：在空白处拖出想要的大小。
+     */
+    if (event.pointerType === 'touch') return;
+
     startDrag(event, { kind: 'draw', origin: unitAt(event) });
   }
 
