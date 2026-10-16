@@ -427,10 +427,6 @@ const els = {
   ovFgText: $('ed-ov-fg-text'),
   link: $('ed-link'),
   sizes: $('ed-sizes'),
-  posX: $('ed-pos-x'),
-  posY: $('ed-pos-y'),
-  posW: $('ed-pos-w'),
-  posH: $('ed-pos-h'),
 };
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
@@ -444,22 +440,6 @@ function setColorPicker(picker, text, value) {
 /** The text field wins when it holds a valid hex literal, so 8-digit alpha works. */
 function readColorPicker(picker, text, fallback) {
   return HEX.test(text.value.trim()) ? text.value.trim() : picker.value || fallback;
-}
-
-/**
- * 把格子的位置/尺寸写进「位置与尺寸」那四个框。
- *
- * 改完 `cell.pos` 一定要顺手调它：`applyForm()` 是从这几个框**往回读**的，
- * 框里还是旧值的话，下一步 `onEdited()` 就把刚改好的尺寸覆盖回去了
- * （点尺寸模版没反应，就是踩的这个）。
- */
-function fillPosFields(cell) {
-  const units = cellUnits(cell);
-  const pos = cell.pos || { x: 0, y: 0 };
-  els.posX.value = String(pos.x);
-  els.posY.value = String(pos.y);
-  els.posW.value = String(units.w);
-  els.posH.value = String(units.h);
 }
 
 function buildSizeOptions() {
@@ -500,7 +480,6 @@ function buildSizeOptions() {
         const fits = wanted.x + wanted.w <= boardCols() && rectFree(others, wanted);
         cell.pos = fits ? wanted : firstFreeSpot(others, boardCols(), size.w, size.h);
       }
-      fillPosFields(cell); // 否则 onEdited → applyForm 会按旧值把尺寸写回去
       syncSizeButtons();
       onEdited();
     });
@@ -553,8 +532,6 @@ function fillForm(cell) {
   setColorPicker(els.ovFg, els.ovFgText, cell.overlay.textColor);
   els.link.value = cell.link;
 
-  fillPosFields(cell);
-
   const thumbWrap = $('thumb-current');
   if (cell.image) {
     $('thumb-img').src = cell.image;
@@ -575,8 +552,6 @@ function syncTypeVisibility() {
   $('fs-solid').hidden = type !== 'solid';
   // the always-on caption sits under both an image and an embedded page
   $('fs-caption').hidden = type !== 'image' && type !== 'html';
-  // 「位置与尺寸」整块在 HTML 里就是 hidden 的：摆位和改尺寸都靠拖拽，
-  // 但那四个输入框还在，applyForm() 每次都要读它们（别顺手删掉）
 }
 
 /** Pull every field back into the cell being edited. */
@@ -603,29 +578,8 @@ function applyForm() {
     textColor: readColorPicker(els.ovFg, els.ovFgText, '#ffffff'),
   };
   cell.link = els.link.value.trim();
-
-  if (isBoard()) {
-    const wanted = {
-      x: Math.max(0, Math.round(Number(els.posX.value) || 0)),
-      y: Math.max(0, Math.round(Number(els.posY.value) || 0)),
-      w: Math.max(1, Math.round(Number(els.posW.value) || 1)),
-      h: Math.max(1, Math.round(Number(els.posH.value) || 1)),
-    };
-    const others = state.doc.cells.filter((item) => item.id !== cell.id).map(rectOf).filter(Boolean);
-    const fits =
-      wanted.x + wanted.w <= boardCols() && wanted.w <= 12 && wanted.h <= 12 && rectFree(others, wanted);
-    if (fits) {
-      cell.pos = wanted;
-    } else {
-      toast('那里放不下，位置没改（和别的格子重叠或者超出棋盘了）', 'error');
-      const pos = cell.pos || { x: 0, y: 0 };
-      const units = cellUnits(cell);
-      els.posX.value = String(pos.x);
-      els.posY.value = String(pos.y);
-      els.posW.value = String(units.w);
-      els.posH.value = String(units.h);
-    }
-  }
+  // 位置和尺寸不在这里改：抽屉里没有那一栏，摆位靠拖拽（board.js 的 legal()）、
+  // 尺寸靠拖右下角手柄或「尺寸」模版 —— 各自都带校验，这里不碰 cell.pos。
 }
 
 function onEdited() {

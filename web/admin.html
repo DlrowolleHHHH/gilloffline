@@ -296,39 +296,6 @@
           </div>
         </fieldset>
 
-        <!--
-          位置与尺寸：整块 hidden，界面上不出现 —— 摆位和改尺寸都靠棋盘上拖拽。
-          但四个输入框必须留在 DOM 里：fillPosFields() 往里写、applyForm() 从里读，
-          抽屉里任何一次改动都会经过它们。
-        -->
-        <fieldset class="fieldset" id="fs-pos" hidden>
-          <legend>位置与尺寸</legend>
-          <div class="grid-2">
-            <div class="field">
-              <label for="ed-pos-x">列（从左往右，0 起）</label>
-              <input class="input" id="ed-pos-x" type="number" min="0" max="11" step="1" />
-            </div>
-            <div class="field">
-              <label for="ed-pos-y">行（从上往下，0 起）</label>
-              <input class="input" id="ed-pos-y" type="number" min="0" max="999" step="1" />
-            </div>
-          </div>
-          <div class="grid-2">
-            <div class="field">
-              <label for="ed-pos-w">宽（格）</label>
-              <input class="input" id="ed-pos-w" type="number" min="1" max="12" step="1" />
-            </div>
-            <div class="field">
-              <label for="ed-pos-h">高（格）</label>
-              <input class="input" id="ed-pos-h" type="number" min="1" max="12" step="1" />
-            </div>
-          </div>
-          <p class="hint">
-            想精确到格就填这里；想快点就在棋盘上拖（拖空白画新格子、拖格子换位置、拖右下角改尺寸）。
-            和别的格子重叠时不会生效。
-          </p>
-        </fieldset>
-
         <fieldset class="fieldset" id="fs-image">
           <legend>图片内容</legend>
           <div class="field">
