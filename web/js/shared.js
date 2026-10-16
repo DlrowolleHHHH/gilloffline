@@ -110,10 +110,7 @@ export function applyCellStyle(node, cell) {
   node.style.setProperty('--bw', `${cell.borderWidth}px`);
   node.style.setProperty('--border', cell.borderColor);
   node.style.setProperty('--caption-fg', cell.imageTitleColor);
-  // 纯色格子用它当底色；封面模式的 HTML 格子也用它 —— 封面就是一块纯色
-  if (cell.type === 'solid' || (cell.type === 'html' && cell.htmlCover)) {
-    node.style.setProperty('--solid', cell.color);
-  }
+  if (cell.type === 'solid') node.style.setProperty('--solid', cell.color);
 }
 
 /**
@@ -183,30 +180,38 @@ export function createCell(cell) {
   if (cell.type === 'html') {
     const media = document.createElement('div');
     media.className = 'cell__media';
-    if (cell.html && cell.htmlCover) {
-      // 封面模式：不渲染页面，只放一块纯色封面（+ 右下角一个小小的展开标记）。
-      // 页面地址挂在 dataset 上，由主页在点击时拿去全屏展开 —— 不是每个格子都会
-      // 被点开，页面就没必要跟着页面一起加载。
-      media.classList.add('cell__media--cover');
-      node.dataset.fullscreen = cell.html;
-      const expand = document.createElement('span');
-      expand.className = 'cell__expand';
-      expand.setAttribute('aria-hidden', 'true');
-      media.append(expand);
-    } else if (cell.html) {
+    if (cell.html) {
+      // 网页封面：封面本身就是一张页面（多半是个带动画的 HTML），直接铺在格子上
       media.append(createFrame(cell.html, cell.imageTitle));
     } else {
       media.classList.add('cell__media--empty');
       const hint = document.createElement('span');
       hint.className = 'cell__hint';
-      hint.textContent = '尚未嵌入页面';
+      hint.textContent = '还没有封面页面';
       media.append(hint);
     }
     node.append(media);
   }
 
-  // the caption under an image or an embedded page is the same always-on badge
-  if ((cell.type === 'image' || cell.type === 'html') && cell.imageTitle) {
+  /*
+   * 嵌入的页面：和封面是两回事，任何类型都能有一个（图片/纯色封面 + 里面嵌一个应用）。
+   * 有它，格子上才会浮出放大角标、点一下全屏展开；页面本身**不加载**，等点开再说。
+   * 地址挂在 dataset 上给主页用。
+   *
+   * 用 <span> 而不是 <button>：格子配了链接时整格是 <a>，<a> 里不能再放交互元素。
+   */
+  if (cell.embed) {
+    node.dataset.fullscreen = cell.embed;
+    const expand = document.createElement('span');
+    expand.className = 'cell__expand';
+    expand.setAttribute('role', 'button');
+    expand.setAttribute('tabindex', '0');
+    expand.setAttribute('aria-label', `全屏查看：${cell.imageTitle || '嵌入的页面'}`);
+    node.append(expand);
+  }
+
+  // 角标三种类型都有：它常显在底部，和封面是什么无关
+  if (cell.imageTitle) {
     const caption = document.createElement('span');
     caption.className = 'cell__caption';
     caption.textContent = cell.imageTitle;

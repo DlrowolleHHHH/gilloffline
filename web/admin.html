@@ -272,9 +272,9 @@
           <div class="field">
             <label for="ed-type">格子类型</label>
             <select class="input" id="ed-type">
-              <option value="image">有内容格子（展示图片）</option>
-              <option value="html">HTML 页面格子（嵌入网页）</option>
-              <option value="solid">纯色格子</option>
+              <option value="image">图片封面（格子上展示图片）</option>
+              <option value="html">网页封面（封面就是一个 HTML，可带动画）</option>
+              <option value="solid">纯色封面（一块颜色）</option>
             </select>
           </div>
           <div class="field" id="field-sizes">
@@ -325,7 +325,7 @@
         </fieldset>
 
         <fieldset class="fieldset" id="fs-html">
-          <legend>HTML 页面</legend>
+          <legend>封面的 HTML（网页封面用）</legend>
           <div class="field">
             <label for="ed-html">页面地址</label>
             <input class="input" id="ed-html" type="text" spellcheck="false" placeholder="/pages/xxx.html 或 https://…" />
@@ -335,21 +335,31 @@
             <button class="btn btn--ghost" id="btn-open-html" type="button">新标签页打开</button>
             <input type="file" id="upload-file-html" accept=".html,.htm,text/html" hidden />
           </div>
-          <div class="field--wide">
-            <label class="check">
-              <input type="checkbox" id="ed-html-cover" />
-              封面模式（格子上不渲染页面，点开才全屏展开）
-            </label>
-            <p class="hint">
-              打开后格子只显示一块纯色封面（颜色用下面的「纯色」选）和角标，页面**不加载**，
-              点一下才全屏展开，右上角有悬浮的关闭按钮（Esc 也行）。
-              封面模式下点击是展开，格子的「链接」不会触发。
-            </p>
+          <p class="hint">
+            这张页面直接铺在格子上当封面，所以多半放个带动画的 HTML。和下面「嵌入的 HTML」是两回事，
+            两边可以填不同的页面。
+          </p>
+        </fieldset>
+
+        <fieldset class="fieldset" id="fs-embed">
+          <legend>嵌入的 HTML（所有类型都能有）</legend>
+          <div class="field">
+            <label for="ed-embed">页面地址</label>
+            <input class="input" id="ed-embed" type="text" spellcheck="false" placeholder="/pages/xxx.html 或 https://…" />
           </div>
+          <div class="upload-picker">
+            <button class="btn" id="btn-upload-embed" type="button">上传 HTML 文件</button>
+            <button class="btn btn--ghost" id="btn-open-embed" type="button">新标签页打开</button>
+            <input type="file" id="upload-file-embed" accept=".html,.htm,text/html" hidden />
+          </div>
+          <p class="hint">
+            和封面是两回事：封面照旧是图片 / 纯色 / 网页，这里再嵌一个可以点开的页面（比如一个小工具）。
+            填了之后，鼠标移到格子上时右下角会浮出放大角标，点格子或角标就**全屏展开**这个页面 ——
+            页面平时不加载，关掉之后它里面的脚本也随之停下。
+          </p>
           <p class="hint">
             上传的页面存在数据目录里，重新部署不会丢。页面在沙箱里运行：可以用 JavaScript，
             但读不到本站的登录状态、调不了本站接口，也影响不到外层页面。
-            页面里的交互（按钮、滚动）要能点到，建议把下面的「悬浮详情」关掉——详情面板一滑进来就盖住页面了。
           </p>
         </fieldset>
 

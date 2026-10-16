@@ -182,7 +182,13 @@ function normalizePos(raw, cols) {
 const sizeUnits = (cell) => SIZE_UNITS[cell.size] || SIZE_UNITS['1x1'];
 
 function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
-  const src = raw && typeof raw === 'object' ? raw : {};
+  const src0 = raw && typeof raw === 'object' ? raw : {};
+  // 过渡：早先试过一版「封面模式」（htmlCover 布尔，页面藏在封面后面）。
+  // 现在「封面」和「嵌入的页面」是两个字段，那一版的意思就是「网页当嵌入的页面、
+  // 封面退成纯色」，照这个搬过来，老数据看上去不会变。
+  const src = src0.htmlCover === true
+    ? { ...src0, type: src0.type === 'html' ? 'solid' : src0.type, embed: src0.embed || src0.html, html: '' }
+    : src0;
   const type = oneOf(src.type, TYPES, 'image');
   const cell = {
     id: typeof src.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(src.id) ? src.id : newId(),
@@ -198,10 +204,11 @@ function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
     imageTitleColor: safeColor(src.imageTitleColor, '#ffffff'),
     // solid cells
     color: safeColor(src.color, '#7e46b9'),
-    // html cells — rendered in a sandboxed iframe on the home page
+    // 「网页封面」那张页面：直接铺在格子上渲染（多半是个带动画的 HTML）
     html: safePageUrl(src.html),
-    // 封面模式：格子上不渲染页面，只放一块封面，点开才全屏展开
-    htmlCover: src.htmlCover === true,
+    // 「嵌入的页面」：任何类型都能再嵌一个，和封面是两回事 ——
+    // 有它，格子上才会浮出放大角标、点开全屏
+    embed: safePageUrl(src.embed),
     // shared
     link: safeUrl(src.link),
     overlay: normalizeOverlay(src.overlay),

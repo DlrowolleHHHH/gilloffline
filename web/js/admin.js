@@ -410,7 +410,7 @@ const els = {
   borderColorText: $('ed-border-color-text'),
   image: $('ed-image'),
   html: $('ed-html'),
-  htmlCover: $('ed-html-cover'),
+  embed: $('ed-embed'),
   fit: $('ed-fit'),
   imageTitle: $('ed-image-title'),
   imageTitleColor: $('ed-image-title-color'),
@@ -520,7 +520,7 @@ function fillForm(cell) {
   setColorPicker(els.borderColor, els.borderColorText, cell.borderColor);
   els.image.value = cell.image;
   els.html.value = cell.html || '';
-  els.htmlCover.checked = cell.htmlCover === true;
+  els.embed.value = cell.embed || '';
   els.fit.value = cell.imageFit;
   els.imageTitle.value = cell.imageTitle;
   setColorPicker(els.imageTitleColor, els.imageTitleColorText, cell.imageTitleColor);
@@ -550,11 +550,9 @@ function fillForm(cell) {
 function syncTypeVisibility() {
   const type = els.type.value;
   $('fs-image').hidden = type !== 'image';
+  // 「封面的 HTML」只有网页封面用；「嵌入的 HTML」和「角标文字」三种类型都有，一直显示
   $('fs-html').hidden = type !== 'html';
-  // 封面模式的 HTML 格子也要用「纯色」那一栏 —— 封面就是一块纯色
-  $('fs-solid').hidden = type !== 'solid' && !(type === 'html' && els.htmlCover.checked);
-  // the always-on caption sits under both an image and an embedded page
-  $('fs-caption').hidden = type !== 'image' && type !== 'html';
+  $('fs-solid').hidden = type !== 'solid';
 }
 
 /** Pull every field back into the cell being edited. */
@@ -567,7 +565,7 @@ function applyForm() {
   cell.borderColor = readColorPicker(els.borderColor, els.borderColorText, '#7e46b9');
   cell.image = els.image.value.trim();
   cell.html = els.html.value.trim();
-  cell.htmlCover = els.htmlCover.checked;
+  cell.embed = els.embed.value.trim();
   cell.imageFit = els.fit.value;
   cell.imageTitle = els.imageTitle.value;
   cell.imageTitleColor = readColorPicker(els.imageTitleColor, els.imageTitleColorText, '#ffffff');
@@ -746,16 +744,11 @@ function bindEditor() {
   buildSizeOptions();
 
   const live = [
-    els.type, els.borderWidth, els.radius, els.image, els.html, els.fit, els.imageTitle,
-    els.color, els.color, els.ovEnabled, els.ovTitle, els.ovBody, els.ovDir,
-    els.ovRatio, els.link,
+    els.type, els.borderWidth, els.radius, els.image, els.html, els.embed, els.fit,
+    els.imageTitle, els.color, els.color, els.ovEnabled, els.ovTitle, els.ovBody,
+    els.ovDir, els.ovRatio, els.link,
   ];
   for (const element of new Set(live)) element.addEventListener('input', onEdited);
-  // checkbox 发的是 change；勾掉/勾上封面模式会连带改变「纯色」那栏的可见性
-  els.htmlCover.addEventListener('change', () => {
-    syncTypeVisibility();
-    onEdited();
-  });
 
   els.type.addEventListener('change', () => {
     syncTypeVisibility();
@@ -786,12 +779,18 @@ function bindEditor() {
 
   bindUpload('btn-upload', 'upload-file', 'uploads', els.image, '图片已上传');
   bindUpload('btn-upload-html', 'upload-file-html', 'pages', els.html, 'HTML 文件已上传');
+  bindUpload('btn-upload-embed', 'upload-file-embed', 'pages', els.embed, 'HTML 文件已上传');
   $('btn-clear-upload').addEventListener('click', () => {
     els.image.value = '';
     onEdited();
   });
   $('btn-open-html').addEventListener('click', () => {
     const target = els.html.value.trim();
+    if (!target) return toast('先填地址或上传一个 HTML 文件', 'error');
+    window.open(target, '_blank', 'noopener');
+  });
+  $('btn-open-embed').addEventListener('click', () => {
+    const target = els.embed.value.trim();
     if (!target) return toast('先填地址或上传一个 HTML 文件', 'error');
     window.open(target, '_blank', 'noopener');
   });

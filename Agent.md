@@ -46,10 +46,14 @@
   （`SIZE_UNITS` 在 `server/store.js`，`SIZES` 在两边各有一份，必须同步）。字符串解析它是坑，别做。
   两者**互不派生**：棋盘用 `pos`，flow 用 `size`；`cellUnits()` 已经处理好（有 `pos` 就用 `pos`）。
 - `pos` 在 flow 文档里也会被保留（`normalizeCell` 两种布局都存）：来回切换布局不能丢摆位。
-- HTML 格子有两个开关：`html` 是页面地址，`htmlCover`（布尔）开「封面模式」—— 格子里不渲染 iframe，
-  只放一块纯色封面，页面挂在 `dataset.fullscreen` 上由主页点击时全屏展开。沙箱 iframe 只在
-  `createFrame()`（`web/js/shared.js`）里创建一处，**不要**在别处手写 iframe：那条规则是
-  「一律非 same-origin 沙箱」，加了 `allow-same-origin` 等于把本站的登录状态交给页面。
+- **封面 与 嵌入是两个字段**（别再把它们混起来）：`html` 是「封面的 HTML」，只在 `type: 'html'`
+  的「网页封面」上用，直接铺在格子上渲染；`embed` 是「嵌入的 HTML」，三种类型都能有。
+  有 `embed` 时 `createCell` 会把地址挂到 `dataset.fullscreen` 上并渲染那个放大角标 ——
+  主页据此把**嵌入的页面**全屏展开（展开的永远不是封面）。`htmlCover` 那条老字段只在
+  `normalizeCell` 里做过渡映射（老数据 = 网页当嵌入页面、封面退成纯色），别再引回来。
+- 沙箱 iframe 只在 `createFrame()`（`web/js/shared.js`）里创建一处，**不要**在别处手写 iframe：
+  那条规则是「一律非 same-origin 沙箱」，加了 `allow-same-origin` 等于把本站的登录状态交给页面。
+  全屏展开用的也是它。
 - `responsive` 那五个键**只对 board 有意义**：flow 本来就会跟着窗口重排，用不到分档
   （`repackColumns()` 对 flow 直接返回 0）。**`padColumns` / `phoneColumns` 的 0 是合法值**
   （这一档不重排），读的时候不能用 `||`。阈值是「设备」概念，判据是

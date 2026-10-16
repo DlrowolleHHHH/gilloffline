@@ -123,51 +123,69 @@
   border: 0;
 }
 
-/* 封面模式：不渲染页面，只有一块纯色封面 + 右下角一个小小的展开标记 */
-.cell__media--cover {
-  background: var(--solid, var(--solid-fallback, #1d1929));
-  cursor: zoom-in;
-}
-
+/*
+ * 放大角标：嵌入了页面的格子，鼠标移上去时在右下角浮出来，点它（或点格子）全屏展开。
+ * 平时透明、缩小、且不吃点击（pointer-events: none），免得挡住封面本身的交互。
+ */
 .cell__expand {
   position: absolute;
   right: 10px;
   bottom: 10px;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--ink-900, #0b0a12) 72%, transparent);
-  opacity: 0.5;
-  transition: opacity 0.16s;
+  z-index: 2; /* 要浮在「网页封面」的 iframe 上面，否则点不到 */
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink-900, #0b0a12) 78%, transparent);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transform: scale(0.78);
+  pointer-events: none;
+  transition: opacity 0.18s, transform 0.18s;
 }
 
-/* 两个对角的小箭头，就是常见的「展开」符号 */
+/* 两个对角的小箭头，就是常见的「放大/展开」符号 */
 .cell__expand::before,
 .cell__expand::after {
   content: '';
   position: absolute;
-  width: 7px;
-  height: 7px;
-  border: 1.5px solid currentColor;
-  color: var(--caption-fg, #fff);
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--caption-fg, #fff);
 }
 
 .cell__expand::before {
-  top: 5px;
-  right: 5px;
+  top: 6px;
+  right: 6px;
   border-left: 0;
   border-bottom: 0;
 }
 
 .cell__expand::after {
-  left: 5px;
-  bottom: 5px;
+  left: 6px;
+  bottom: 6px;
   border-right: 0;
   border-top: 0;
 }
 
-.cell:hover .cell__expand {
+.cell:hover .cell__expand,
+.cell__expand:focus-visible {
   opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+/* 悬到角标本身时再放大一点，明确它是能点的 */
+.cell__expand:hover {
+  transform: scale(1.18);
+}
+
+/* 触屏没有 hover：常显，否则永远点不到 */
+@media (hover: none) {
+  .cell__expand {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
 }
 
 /* ------------------------------------------------------------ 全屏展开 */
@@ -181,6 +199,10 @@
   inset: 0;
   z-index: 80;
   background: var(--ink-900, #08070d);
+  /* 打开/关闭都是「从格子那儿放大出来、再缩回去」，JS 只负责给出首尾两帧 */
+  transform-origin: center center;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.24s ease;
+  will-change: transform, opacity;
 }
 
 .fullscreen__frame {

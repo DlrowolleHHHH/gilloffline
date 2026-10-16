@@ -122,24 +122,48 @@ async function boot() {
   }
 }
 
-/* ------------------------------------------------------- 封面格子的全屏展开 */
+/* --------------------------------------------------- 嵌入页面的全屏展开 */
 
 /**
- * 封面模式的 HTML 格子：格子上只有一块封面，点开才把页面全屏展开。
+ * 嵌入了页面的格子：点一下把页面全屏展开，从格子所在的位置放大出来（等比缩放，
+ * 不把页面拉变形），关掉时缩回原处。
  *
- * iframe 是**打开时创建、关掉就移除**的：没点开的格子不加载页面（省流量，也免得
- * 几个页面在后台一起跑），关掉之后页面里的脚本和定时器也随 iframe 一起没了。
+ * iframe 是**打开时创建、关掉就移除**的：没点开的格子不加载页面（省流量，也免得几个
+ * 页面在后台一起跑），关掉之后页面里的脚本和定时器也随 iframe 一起没了。
  */
+const FULLSCREEN_MS = 300;
 let fullscreen = null;
+/** 关掉时要缩回哪儿（没记就淡出）。 */
+let fullscreenFrom = '';
+
+/** 从格子的矩形算出一个「就这么大、在那个位置」的起始变换（等比，取宽度算缩放）。 */
+function zoomFrom(rect) {
+  if (!rect || !rect.width) return '';
+  const dx = rect.left + rect.width / 2 - window.innerWidth / 2;
+  const dy = rect.top + rect.height / 2 - window.innerHeight / 2;
+  const scale = Math.max(0.05, Math.min(1, rect.width / window.innerWidth));
+  return `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${scale.toFixed(3)})`;
+}
 
 function closeFullscreen() {
   if (!fullscreen) return;
-  fullscreen.remove(); // iframe 跟着走：页面里的脚本、定时器随之停止
-  fullscreen = null;
-  document.body.classList.remove('is-fullscreen');
+  const box = fullscreen;
+  fullscreen = null; // 先置空：关到一半再点一次也不会出错
+  if (!fullscreenFrom) {
+    box.remove();
+    document.body.classList.remove('is-fullscreen');
+    return;
+  }
+  box.style.transform = fullscreenFrom;
+  box.style.opacity = '0';
+  fullscreenFrom = '';
+  setTimeout(() => {
+    box.remove(); // iframe 跟着走：页面里的脚本、定时器随之停止
+    document.body.classList.remove('is-fullscreen');
+  }, FULLSCREEN_MS);
 }
 
-function openFullscreen(url, title) {
+function openFullscreen(url, title, rect) {
   closeFullscreen();
   const box = document.createElement('div');
   box.className = 'fullscreen';
@@ -156,23 +180,53 @@ function openFullscreen(url, title) {
   close.addEventListener('click', closeFullscreen);
 
   box.append(frame, close);
+  // 先摆成格子的大小和位置，下一帧再回到满屏 —— CSS 的 transition 负责补这一路
+  fullscreenFrom = zoomFrom(rect);
+  if (fullscreenFrom) {
+    box.style.transform = fullscreenFrom;
+    box.style.opacity = '0';
+  }
   document.body.append(box);
   document.body.classList.add('is-fullscreen');
   fullscreen = box;
+  if (fullscreenFrom) {
+    requestAnimationFrame(() => {
+      if (!fullscreen) return;
+      box.style.transform = '';
+      box.style.opacity = '';
+    });
+  }
 }
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeFullscreen();
 });
 
+// 角标是 role="button"，键盘上也要能展开
+grid.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const expand = event.target.closest('.cell__expand');
+  const cell = expand && expand.closest('.cell');
+  if (!cell || !cell.dataset.fullscreen) return;
+  event.preventDefault();
+  openFullscreen(cell.dataset.fullscreen, cell.querySelector('.cell__caption')?.textContent || '',
+    expand.getBoundingClientRect());
+});
+
 // Touch devices have no hover: tap a cell once to open its detail panel.
 grid.addEventListener('click', (event) => {
   const cell = event.target.closest('.cell');
   if (!cell) return;
-  // 封面格子：点一下展开全屏。格子可能同时是 <a>（配了链接），先拦下跳转。
+  // 嵌入了页面的格子：点一下（或点右下角那个放大角标）全屏展开。
+  // 格子可能同时是 <a>（配了链接），先拦下跳转。
   if (cell.dataset.fullscreen) {
     event.preventDefault();
-    openFullscreen(cell.dataset.fullscreen, cell.querySelector('.cell__caption')?.textContent || '');
+    // 角标在「网页封面」上是浮在 iframe 之上的，那儿只有它点得到
+    openFullscreen(
+      cell.dataset.fullscreen,
+      cell.querySelector('.cell__caption')?.textContent || '',
+      (event.target.closest('.cell__expand') || cell).getBoundingClientRect()
+    );
     return;
   }
   if (!cell.querySelector('.cell__overlay')) return;

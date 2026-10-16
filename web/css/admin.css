@@ -432,6 +432,11 @@
   pointer-events: none;
 }
 
+/* 放大角标是主页的交互（点开全屏）；棋盘上的格子点开的是抽屉，别显示它 */
+.slot .cell__expand {
+  display: none;
+}
+
 .slot.is-dragging {
   opacity: 0.35;
 }
