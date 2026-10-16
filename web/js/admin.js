@@ -369,6 +369,8 @@ function bindBoard() {
       cell.pos = { ...rect };
       board.patch(cell);
     },
+    // 长按够时间、进入拖拽模式：浮一句提示，随即自己消失
+    onArm: () => toast('进入拖拽', 'ok', 900),
     onDraw: (rect) => {
       toBoard();
       const cell = defaultCell({ size: '1x1', pos: { ...rect } });
@@ -387,6 +389,17 @@ function bindBoard() {
     layoutBoard();
     $('board-status').textContent = boardNotices();
   });
+
+  /*
+   * 触屏拖拽延时：调手感用的开关，0 = 按下去就能拖（默认）。只活在这次会话里，
+   * 不写进站点数据 —— 它是「这台设备上怎么操作」的偏好，不是站点内容。
+   * 绑定的时候先读一遍：万一浏览器把表单值恢复了（前进后退、会话恢复），
+   * 输入框里显示什么就得是什么。
+   */
+  const delayInput = $('board-delay');
+  const applyDelay = () => board.setHoldDelay(delayInput.value);
+  delayInput.addEventListener('input', applyDelay);
+  applyDelay();
 
   // the cell size is measured from the panel, so a resize has to re-measure
   window.addEventListener('resize', () => {

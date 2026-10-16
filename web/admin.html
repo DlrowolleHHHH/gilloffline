@@ -242,6 +242,14 @@
             </select>
           </label>
 
+          <label class="tool" for="board-delay">
+            <span class="tool__label">拖拽延时</span>
+            <input class="input input--slim tool__number" id="board-delay" type="number" min="0" max="3000" step="50"
+                   value="0" inputmode="numeric"
+                   title="触屏上按住多久才进入拖拽（毫秒）。0 = 按下去就能拖，这是默认值；填大于 0 的数，按住够这么久才进拖拽，方便调手感。只影响你自己浏览器里的编辑视图，不会写进站点数据。" />
+            <span class="tool__label">ms</span>
+          </label>
+
           <span class="hint" id="site-columns-hint" hidden></span>
           <span class="hint admin-toolbar__help">
             在空白处拖动画出格子 · 拖动格子换位置 · 拖右下角的小方块改尺寸 · 单击格子编辑内容

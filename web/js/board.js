@@ -97,6 +97,50 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
     if (status) status.textContent = message;
   };
 
+  /* ---------------------------------------------------------- 触屏拖拽延时 */
+
+  /**
+   * 触屏上「按住多久才进入拖拽」，毫秒；0 = 按下去就能拖（默认）。
+   *
+   * 纯粹是调手感用的开关：由管理页工具栏传进来，不写进站点数据，刷新回 0。
+   * 大于 0 时，按住期间指头移动超过一点就取消（那是在滑动，不该变成拖动）。
+   */
+  let holdDelay = 0;
+  let hold = null;
+
+  function clearHold() {
+    if (!hold) return;
+    clearTimeout(hold.timer);
+    window.removeEventListener('pointermove', holdMove);
+    window.removeEventListener('pointerup', clearHold);
+    window.removeEventListener('pointercancel', clearHold);
+    hold = null;
+  }
+
+  function holdMove(event) {
+    if (!hold || event.pointerId !== hold.pointerId) return;
+    // 按住的这段时间里指头挪得太远，就当用户在滑动，这一下不进拖拽
+    if (Math.hypot(event.clientX - hold.x, event.clientY - hold.y) > 12) clearHold();
+  }
+
+  /** 按够了：进入拖拽模式（先喊一声 onArm，管理页拿它弹个提示），再交给正常手势。 */
+  function armHold(event, info) {
+    clearHold();
+    hold = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      timer: setTimeout(() => {
+        clearHold();
+        onArm();
+        startDrag(event, info);
+      }, holdDelay),
+    };
+    window.addEventListener('pointermove', holdMove);
+    window.addEventListener('pointerup', clearHold);
+    window.addEventListener('pointercancel', clearHold);
+  }
+
   /* --------------------------------------------------------------- pointer */
 
   function onPointerDown(event) {
@@ -125,7 +169,9 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
         offsetX: clamp(grab.x - pos.x, 0, Math.max(0, (pos.w || 1) - 1)),
         offsetY: clamp(grab.y - pos.y, 0, Math.max(0, (pos.h || 1) - 1)),
       };
-      startDrag(event, info);
+      // 触屏且设了延时：先按住等够时间；鼠标、或者延时为 0，按下去就能拖
+      if (event.pointerType === 'touch' && holdDelay > 0) armHold(event, info);
+      else startDrag(event, info);
       return;
     }
 
@@ -191,6 +237,7 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   }
 
   function onPointerUp(event) {
+    clearHold();
     if (!drag) return;
     stopListening();
     const { kind, id, rect, moved, captured } = drag;
@@ -237,6 +284,7 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   }
 
   const onPointerCancel = () => {
+    clearHold();
     if (!drag) return;
     stopListening();
     drag = null;
@@ -346,10 +394,13 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
   /* -------------------------------------------------------------- plumbing */
 
   let onCreate = () => {};
+  /** 按住够时长、进入拖拽模式时喊一声（管理页拿它弹个提示）。 */
+  let onArm = () => {};
 
-  function bind({ onDraw, onPlace: onPlaceCb } = {}) {
+  function bind({ onDraw, onPlace: onPlaceCb, onArm: onArmCb } = {}) {
     onCreate = onDraw || (() => {});
     onPlace = onPlaceCb || (() => {});
+    onArm = onArmCb || (() => {});
     // only the start: from there the gesture follows the pointer on the window
     root.addEventListener('pointerdown', onPointerDown);
     /*
@@ -433,6 +484,11 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
     /** Extra room to the right so a drag to the edge is still visible. */
     setColumns: (value) => {
       columns = value;
+    },
+    /** 触屏拖拽延时（毫秒，0 = 直接拖）。管理页工具栏上那个调试开关。 */
+    setHoldDelay: (ms) => {
+      holdDelay = Math.max(0, Number(ms) || 0);
+      clearHold();
     },
   };
 }

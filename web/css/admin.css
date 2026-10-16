@@ -472,6 +472,11 @@
   padding: 5px 7px;
 }
 
+/* 工具条里唯一的数字输入框：下拉框能自己撑开，它不能 */
+.tool__number {
+  width: 4.4rem;
+}
+
 /* the board instructions take whatever room is left at the end of the row */
 .admin-toolbar__help {
   margin-left: auto;

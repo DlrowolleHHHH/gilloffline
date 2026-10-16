@@ -486,7 +486,7 @@ export async function fetchSite() {
   return res.json();
 }
 
-export function toast(message, kind = '') {
+export function toast(message, kind = '', ms = 2600) {
   let node = document.querySelector('.toast');
   if (!node) {
     node = document.createElement('div');
@@ -496,5 +496,5 @@ export function toast(message, kind = '') {
   node.textContent = message;
   node.className = `toast is-visible ${kind ? `is-${kind}` : ''}`.trim();
   clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => node.classList.remove('is-visible'), 2600);
+  toast._timer = setTimeout(() => node.classList.remove('is-visible'), ms);
 }
