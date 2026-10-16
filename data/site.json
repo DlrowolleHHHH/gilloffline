@@ -12,14 +12,14 @@
   "cells": [
     {
       "id": "c00000000002",
-      "type": "solid",
+      "type": "image",
       "size": "1x1",
       "borderColor": "#2a2438",
       "borderWidth": 2,
       "radius": 14,
       "image": "",
       "imageFit": "cover",
-      "imageTitle": "",
+      "imageTitle": "管理入口",
       "imageTitleColor": "#ffffff",
       "color": "#1d1929",
       "link": "/admin",
