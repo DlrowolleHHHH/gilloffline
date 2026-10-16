@@ -12,10 +12,11 @@
   </head>
   <body>
     <header class="site-header wrap">
-      <div class="brand">
+      <!-- 左上角 title 图点回主页（href 由 JS 补上当前 userid） -->
+      <a class="brand" id="brand-home" href="/" title="返回主页">
         <img class="brand__title" src="/assets/title.png" alt="Gill Offline" />
         <span class="hint">管理页</span>
-      </div>
+      </a>
       <div class="topbar-actions" id="topbar-actions" hidden>
         <span class="dirty-flag" id="dirty-flag" hidden>未保存</span>
         <button class="btn" id="btn-save" type="button" title="保存（⌘S / Ctrl+S）">保存</button>
@@ -55,6 +56,9 @@
           <button class="btn btn--primary" type="submit" id="login-submit">登录</button>
         </form>
         <p class="hint login-card__error" id="login-error" hidden></p>
+        <p class="hint login-card__back">
+          <a id="login-home" href="/">← 返回主页</a>
+        </p>
       </section>
 
       <!-- --------------------------------------------------------- app -->

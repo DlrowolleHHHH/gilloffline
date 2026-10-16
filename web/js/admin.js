@@ -1413,6 +1413,10 @@ async function start() {
 }
 
 async function boot() {
+  // 回主页的两个入口都带上当前 userid：子管理员点回去应该是自己的站，不是站主的
+  // （登录页上就要能用，所以放在这里而不是 showApp() 里）
+  $('brand-home').href = withUserid('/');
+  $('login-home').href = withUserid('/');
   bindLogin();
   bindToolbar();
   bindBoard();

@@ -107,6 +107,8 @@ main {
   align-items: center;
   gap: 14px;
   min-width: 0;
+  /* 管理页把它做成 <a>（点回主页），首页是 <div>，这里去掉链接默认的下划线 */
+  text-decoration: none;
 }
 
 /* title.png, pinned to the top-left corner of the page */
