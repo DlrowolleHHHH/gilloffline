@@ -146,7 +146,13 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
       return;
     }
     if (cell) {
-      startDrag(event, moveInfo(cell, event));
+      /*
+       * 触屏上格子的本体只负责「轻点开编辑」：挪位置一律走右下角那个方块。
+       * 指头按在格子中间既看不见落点、又说不准挪了多少格，而格子几乎占满屏幕 ——
+       * 一按就拖还等于把翻页也一起吃了。本体不接管手势，`touch-action` 交还给浏览器。
+       * 鼠标照旧：按在格子哪儿都能拖。
+       */
+      if (event.pointerType !== 'touch') startDrag(event, moveInfo(cell, event));
       return;
     }
 

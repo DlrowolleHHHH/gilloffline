@@ -123,8 +123,12 @@ dataset.inset = `${clientLeft + padX + centered},${clientTop + padY}`;
 legal(rect, exceptId) = 宽高 ≥ 1 && 在列范围内 && 不压到别的格子
 ```
 
-- **触屏和鼠标是同一套手势**：按住拖动 = 移动，轻点 = 打开编辑，区别只在指头有没有移动
-  （`drag.moved` 只认「跨了格子」，所以小于一格的抖动不会真的挪动格子，那次点击仍算轻点）。
+- **触屏和鼠标是两个入口**（`onPointerDown` 里按 `pointerType` 分）：鼠标按在格子哪儿都能拖；
+  触屏上**格子本体不接手势** —— 轻点是打开编辑，滑动是翻页，挪位置/改大小一律走右下角的方块。
+  理由是触屏上按格子中间既看不见落点、也说不出挪了几格，而格子几乎占满屏幕，一按就拖连翻页都吃掉。
+  分完入口后 **`touch-action` 也要跟着分**：本体 `auto`（交还浏览器），只有 `.slot__handle` 是 `none`
+  （触屏上唯一的抓取点，还得用 `::before` 把命中范围撑到 34px）。`drag.moved` 只认「跨了格子」，
+  所以小于一格的抖动不会真的挪动格子，那次点击仍算轻点。
   触摸指针带隐式捕获，**别**在 pointerdown 就 setPointerCapture，也**别**把 lostpointercapture
   当取消（见坑表）——这两条都只在真机上才暴露。
 - **右下角那个方块拖什么，由开关定（`setHandleMode('resize' | 'move')`）**：`resize` 是默认
@@ -133,10 +137,10 @@ legal(rect, exceptId) = 宽高 ≥ 1 && 在列范围内 && 不压到别的格子
   **不进 `site.json`**（同「缩放」：一次打开的偏好）。它**对所有指针类型生效**：
   设备同时有鼠标和触屏时，「两边行为一致」比「看是谁按的」更好猜。
 - **触屏不画格子**：`onPointerDown` 走到最后一个分支（空白处 → `kind: 'draw'`）之前，
-  `pointerType === 'touch'` 直接 return。空白处的 `touch-action` 是 `auto`（只有 `.board__slot`
-  是 `none`），浏览器会把这一手认成滚动并 `pointercancel`，不 return 也只是白搭；
-  触屏新建走「＋ 添加格子」（落 1×1 在最下面，抽屉里给尺寸模版）。
-  对应的提示是棋盘上方的 `.board-touch-hint`，只在 `(hover: none)` 下显示。
+  `pointerType === 'touch'` 直接 return。空白处是 `touch-action: auto`，浏览器会把这一手
+  认成滚动并 `pointercancel`，不 return 也只是白搭；触屏新建走「＋ 添加格子」
+  （落 1×1 在最下面，抽屉里给尺寸模版）。对应的提示在棋盘上方的 `.board-touch-bar` 里，
+  和「尺寸 / 位置」开关同一栏，只在 `(hover: none)` 下显示。
 - **手势结束前不改文档**：拖动只移动 ghost，落点合法才 touch 数据。
   否则每一帧都会重建格子，内嵌 iframe 和图片会不停重载。
 - **监听在 window 上，不在棋盘上。** pointerdown 挂在棋盘（`root`），但一旦开始手势，
@@ -233,6 +237,7 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 | 15% 时最后两行点不到 | `min-height` 被 `border-box` 吃掉 14px，元素比格线矮 |
 | 缩小后空行里按不动 | 固定 22px 的按钮条溢出格子，隐形但吃掉了点击 |
 | 缩放比例不精确（50% 不是一半） | 用缩放后的 gap 去等分，基准跟着漂 |
+| 手机上整块棋盘都翻不动 | `.board__slot` 一律 `touch-action: none`：格子铺满屏幕，等于整屏都是死区。只有真正的抓取点（`.slot__handle`）该拦，本体要交还给浏览器 |
 | 点「尺寸」把格子的点击行为改了 | `bindActionTabs()` 原来扫全页的 `.segmented__btn`；棋盘上方新加的那组也是这个类，被一起接上了。**分组控件的选择器要带容器**（现在扫 `#action-tabs`） |
 
 ## 8. 改这块代码之前的检查表

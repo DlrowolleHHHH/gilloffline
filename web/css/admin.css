@@ -336,7 +336,15 @@
 }
 
 .board__slot {
-  touch-action: none;
+  /*
+   * 触屏上格子本体不接手势（只轻点开编辑），翻页交还给浏览器 —— 整屏都是格子，
+   * 全设成 none 就等于整屏都翻不动。唯一能抓住拖的是右下角那个方块，它自带 none。
+   * `user-select` / `-webkit-touch-callout` 一起关掉：慢一点的拖动在 iOS 上会变成选字，
+   * 长按带链接的格子还会弹「在新标签页打开」。
+   */
+  touch-action: auto;
+  user-select: none;
+  -webkit-touch-callout: none;
   cursor: grab;
 }
 
@@ -378,6 +386,8 @@
   cursor: nwse-resize;
   opacity: 0;
   transition: opacity 0.16s;
+  /* 触屏上它是唯一的抓取点，得拦在浏览器前面：否则按住方块也会被当成翻页 */
+  touch-action: none;
 }
 
 .board__slot:hover .slot__handle,
@@ -427,6 +437,16 @@
     right: -6px;
     bottom: -6px;
     opacity: 1;
+  }
+
+  /*
+   * 视觉上还是 22px，命中范围撑到 34px（和放大角标同款尺寸）：
+   * 方块现在是触屏上唯一的抓取点，指头按不准就等于挪不动格子。
+   */
+  .slot__handle::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
   }
 }
 
