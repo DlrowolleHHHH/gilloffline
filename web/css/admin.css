@@ -703,22 +703,46 @@
   align-items: center;
 }
 
-/* 「无」也是合法值的行：末尾多一个按钮 */
+/* 带「透明」按钮的颜色行：末尾多一格 */
 .color-row--none {
   grid-template-columns: 48px minmax(0, 1fr) auto;
 }
 
-.btn--none {
-  padding: 8px 12px;
+/*
+ * 透明色按钮：业界通用的「无颜色」图标 —— 白底 + 一道红斜杠（Photoshop / Figma 那个）。
+ * 高度跟着这一行走，和色板、文本框对齐。
+ */
+.color-none {
+  width: 44px;
+  height: 100%;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background:
+    linear-gradient(
+      to top right,
+      transparent calc(50% - 1px),
+      #e5484d calc(50% - 1px),
+      #e5484d calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ),
+    #fff;
+  cursor: pointer;
+  transition: border-color 0.16s, box-shadow 0.16s;
 }
 
-.btn--none[aria-pressed='true'] {
+.color-none:hover {
+  border-color: color-mix(in srgb, var(--line) 40%, var(--text));
+}
+
+/* 选中的样子和分段控件一致：描边点亮 + 一圈光晕 */
+.color-none[aria-pressed='true'] {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 22%, var(--ink-700));
-  color: var(--text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-/* 选了「无」，色板就没意义了：灰掉，但留着上一个颜色，再按一下能回来 */
+/* 选了透明，色板就没意义了：灰掉，但留着上一个颜色，再按一下能回来 */
 .color-row input[type='color']:disabled {
   opacity: 0.4;
 }

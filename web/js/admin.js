@@ -465,13 +465,13 @@ function readColorPicker(picker, text, fallback) {
   return HEX.test(text.value.trim()) ? text.value.trim() : picker.value || fallback;
 }
 
-/** 「无」也算合法值的颜色行（边框颜色、底色）：文本空 = 这一项不填，存成空串。 */
+/** 「透明」也算合法值的颜色行（边框颜色、底色）：文本空 = 这一项不填，存成空串。 */
 function readOptionalColor(picker, text, fallback) {
   return text.value.trim() === '' ? '' : readColorPicker(picker, text, fallback);
 }
 
 /**
- * 同步「无」按钮和色板的状态。没有这个按钮的字段（角标文字、详情配色）传 undefined，
+ * 同步透明色按钮和色板的状态。没有这个按钮的字段（角标文字、详情配色）传 undefined，
  * 那就什么都不做 —— 那些字段不能让文本空着，空着只会退回色板。
  */
 function setColorNone(button, picker, none) {
@@ -845,7 +845,7 @@ function bindEditor() {
   ]) {
     picker.addEventListener('input', () => {
       text.value = picker.value;
-      setColorNone(none, picker, false); // 手动挑了颜色就不再是「无」
+      setColorNone(none, picker, false); // 手动挑了颜色就不再是透明
       onEdited();
     });
     text.addEventListener('input', () => {
@@ -855,7 +855,7 @@ function bindEditor() {
       onEdited();
     });
     if (none) {
-      // 「无」是个开关：按下去清空这一项，再按一下把上一个颜色拿回来（色板里还留着）
+      // 透明色是个开关：按下去清空这一项，再按一下把上一个颜色拿回来（色板里还留着）
       none.addEventListener('click', () => {
         const off = none.getAttribute('aria-pressed') !== 'true';
         text.value = off ? '' : picker.value;
