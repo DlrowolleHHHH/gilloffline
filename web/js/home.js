@@ -279,8 +279,25 @@ grid.addEventListener('click', (event) => {
       cell.getBoundingClientRect());
     return;
   }
-  if (cell.tagName === 'A') return; // 有链接：这一次就交给浏览器
+  if (cell.tagName === 'A') {
+    // 有链接：这一次就交给浏览器（链接是新标签页打开的）。顺手把详情收掉 ——
+    // 那个标签页关掉、切回来的时候，页面该是干净的，而不是面板还挂着。
+    cell.classList.remove('is-open');
+    return;
+  }
   if (isOpen) cell.classList.remove('is-open'); // 只有详情：再点一次收起
+});
+
+/*
+ * 从别的页面回来（后退，或者浏览器整页从 bfcache 里端回来）时，上一次点开的详情还在 DOM 上，
+ * 有时那个格子还带着焦点 —— 看着就像「面板一直没关」。回来就该是一张干净的页面：
+ * 关掉详情和全屏，顺手把焦点从格子上挪开（键盘的 :focus-visible 也会撑着面板）。
+ */
+window.addEventListener('pageshow', () => {
+  closeOpenCells();
+  closeFullscreen();
+  const active = document.activeElement;
+  if (active && active.closest && active.closest('.cell')) active.blur();
 });
 
 boot();

@@ -237,6 +237,8 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 | 15% 时最后两行点不到 | `min-height` 被 `border-box` 吃掉 14px，元素比格线矮 |
 | 缩小后空行里按不动 | 固定 22px 的按钮条溢出格子，隐形但吃掉了点击 |
 | 缩放比例不精确（50% 不是一半） | 用缩放后的 gap 去等分，基准跟着漂 |
+| 点过带链接的格子，鼠标挪开详情面板还挂着 | 展开面板的规则里有 `.cell:focus-within`，而鼠标点一下同样会给格子（`tabIndex = 0`）或它里面的 `<a>` 焦点 —— 焦点不散，面板不关。要用 `:focus-visible`（只有键盘算），别用 `:focus-within` |
+| 从别的页面回来，详情面板还是开着的 | 触屏留下的 `.is-open` 跟着 DOM 一起被 bfcache 端回来；而链接是 `target="_blank"`，原页面压根没走过，纯粹是「没人清」。`pageshow` 里清一次（顺手摘掉格子上的焦点），「进去」那一下也把 `.is-open` 收掉 |
 | 手机上整块棋盘都翻不动 | `.board__slot` 一律 `touch-action: none`：格子铺满屏幕，等于整屏都是死区。只有真正的抓取点（`.slot__handle`）该拦，本体要交还给浏览器 |
 | 点「尺寸」把格子的点击行为改了 | `bindActionTabs()` 原来扫全页的 `.segmented__btn`；棋盘上方新加的那组也是这个类，被一起接上了。**分组控件的选择器要带容器**（现在扫 `#action-tabs`） |
 
@@ -252,4 +254,5 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 - [ ] `padColumns` / `phoneColumns` 的 0（不重排）在读的时候活下来了？
 - [ ] 手势的几个入口（格子本体 / 右下角方块，方块还有两种模式）都还汇到同一个 `startDrag`？
       新加的分段控件没被抽屉那套 `bindActionTabs` 误接上？
+- [ ] 主页的详情面板还是「鼠标 hover / 键盘 `:focus-visible` / 触屏 `.is-open`」三条，没有哪一条会赖着不动？
 - [ ] 上面第 6 节那七条断言都跑过？

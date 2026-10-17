@@ -409,8 +409,12 @@ body.is-fullscreen {
  * 触屏一律由 .is-open 说了算（由 home.js 在点击时切换）。
  */
 @media (hover: hover) {
-  .cell:hover .cell__overlay,
-  .cell:focus-within .cell__overlay {
+  /*
+   * 这里**不能**写 `:focus-within`：鼠标点一下也会给格子（`tabIndex = 0`）或者它里面的
+   * `<a>` 焦点，于是面板被一直撑着 —— 鼠标都挪开了还挂着，看着像关不掉。
+   * 键盘的焦点由下面那条 `.cell:focus-visible` 负责（鼠标点出来的焦点不算 focus-visible）。
+   */
+  .cell:hover .cell__overlay {
     transform: translate(0, 0);
   }
 }
