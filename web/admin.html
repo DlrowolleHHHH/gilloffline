@@ -488,9 +488,23 @@
         <input class="color-pop__range color-pop__range--alpha" id="color-pop-alpha" type="range"
                min="0" max="100" step="1" aria-label="不透明度" />
       </div>
+      <div class="color-pop__modes" id="color-pop-modes" role="group" aria-label="颜色格式">
+        <button class="color-pop__mode is-on" type="button" data-mode="hex">HEX</button>
+        <button class="color-pop__mode" type="button" data-mode="rgb">RGB</button>
+        <button class="color-pop__mode" type="button" data-mode="hsv">HSV</button>
+      </div>
+      <div class="color-pop__fields" id="color-pop-fields"></div>
       <div class="color-pop__foot">
         <span class="color-pop__preview" id="color-pop-preview"></span>
-        <code class="color-pop__value" id="color-pop-value"></code>
+        <button class="color-pop__icon" id="color-pop-eyedropper" type="button"
+                title="吸管：从屏幕上取色" aria-label="吸管取色">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m2 22 1-1h3l9-9" />
+            <path d="M3 21v-3l9-9" />
+            <path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z" />
+          </svg>
+        </button>
         <button class="color-none" id="color-pop-none" type="button" aria-label="透明"
                 title="透明（不设颜色）"></button>
       </div>

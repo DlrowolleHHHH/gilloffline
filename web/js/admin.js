@@ -481,14 +481,18 @@ const pop = {
   hue: $('color-pop-hue'),
   alpha: $('color-pop-alpha'),
   preview: $('color-pop-preview'),
-  value: $('color-pop-value'),
   none: $('color-pop-none'),
+  modes: $('color-pop-modes'),
+  fields: $('color-pop-fields'),
+  eyedropper: $('color-pop-eyedropper'),
 };
 
 /** 面板正在调的那一行：{ swatch, text, allowNone }。 */
 let popTarget = null;
 let popHsv = { h: 0, s: 0, v: 0, a: 1 };
 let popDragging = false;
+/** 数值区当前显示哪种格式：'hex' | 'rgb' | 'hsv'（面板打开期间保持不变）。 */
+let popMode = 'hex';
 
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 
@@ -537,7 +541,73 @@ function rgbaToHex({ r, g, b, a }) {
 
 const popColor = () => rgbaToHex({ ...hsvToRgb(popHsv), a: popHsv.a });
 
-function paintPop() {
+/** 数值区的几种写法；A 是 0–100 的百分比。 */
+const POP_FIELDS = {
+  hex: [{ key: 'hex', label: 'HEX', type: 'text' }],
+  rgb: [
+    { key: 'r', label: 'R', max: 255 },
+    { key: 'g', label: 'G', max: 255 },
+    { key: 'b', label: 'B', max: 255 },
+    { key: 'a', label: 'A %', max: 100 },
+  ],
+  hsv: [
+    { key: 'h', label: 'H', max: 360 },
+    { key: 's', label: 'S %', max: 100 },
+    { key: 'v', label: 'V %', max: 100 },
+    { key: 'a', label: 'A %', max: 100 },
+  ],
+};
+
+/** 按当前格式重建数值输入框。 */
+function renderPopFields() {
+  pop.fields.replaceChildren();
+  for (const field of POP_FIELDS[popMode]) {
+    const label = document.createElement('label');
+    label.className = 'color-pop__field';
+    const caption = document.createElement('span');
+    caption.textContent = field.label;
+    const input = document.createElement('input');
+    input.dataset.key = field.key;
+    if (field.type === 'text') {
+      input.type = 'text';
+      input.spellcheck = false;
+      input.maxLength = 9;
+    } else {
+      input.type = 'number';
+      input.min = '0';
+      input.max = String(field.max);
+      input.step = '1';
+    }
+    label.append(caption, input);
+    pop.fields.append(label);
+  }
+  paintPopFields();
+}
+
+/** 把当前颜色填进输入框；正在打字的那一格不覆盖（否则光标会跳）。 */
+function paintPopFields() {
+  const put = (key, value) => {
+    const input = pop.fields.querySelector(`[data-key="${key}"]`);
+    if (input && document.activeElement !== input) input.value = String(value);
+  };
+  if (popMode === 'hex') {
+    put('hex', popColor());
+    return;
+  }
+  const rgb = hsvToRgb(popHsv);
+  if (popMode === 'rgb') {
+    put('r', Math.round(rgb.r * 255));
+    put('g', Math.round(rgb.g * 255));
+    put('b', Math.round(rgb.b * 255));
+  } else {
+    put('h', Math.round(popHsv.h));
+    put('s', Math.round(popHsv.s * 100));
+    put('v', Math.round(popHsv.v * 100));
+  }
+  put('a', Math.round(popHsv.a * 100));
+}
+
+function paintPop({ fields = true } = {}) {
   const solid = rgbaToHex({ ...hsvToRgb(popHsv), a: 1 });
   pop.sv.style.setProperty('--hue', String(Math.round(popHsv.h)));
   pop.knob.style.left = `${popHsv.s * 100}%`;
@@ -547,7 +617,7 @@ function paintPop() {
   pop.alpha.value = String(Math.round(popHsv.a * 100));
   pop.alpha.style.setProperty('--solid', solid);
   pop.preview.style.setProperty('--sw', popColor());
-  pop.value.textContent = popColor();
+  if (fields) paintPopFields();
 }
 
 /** 面板里的改动立刻写回表单和预览（拖动时每一帧都会被调用）。 */
@@ -590,6 +660,7 @@ function openColorPop(swatch, text, allowNone) {
   pop.none.hidden = !allowNone; // 只有边框颜色、底色有「透明」这个值
   pop.none.setAttribute('aria-pressed', String((swatch.dataset.color || '') === ''));
   pop.box.hidden = false;
+  renderPopFields();
   paintPop();
   positionPop(swatch);
 }
@@ -615,6 +686,69 @@ pop.sv.addEventListener('pointerup', () => {
 });
 pop.sv.addEventListener('pointercancel', () => {
   popDragging = false;
+});
+
+pop.modes.addEventListener('click', (event) => {
+  const button = event.target.closest('.color-pop__mode');
+  if (!button) return;
+  popMode = button.dataset.mode;
+  for (const other of pop.modes.querySelectorAll('.color-pop__mode')) {
+    other.classList.toggle('is-on', other === button);
+  }
+  renderPopFields();
+});
+
+pop.fields.addEventListener('input', (event) => {
+  const input = event.target.closest('input');
+  if (!input) return;
+  const key = input.dataset.key;
+
+  if (key === 'hex') {
+    const value = input.value.trim();
+    if (!HEX.test(value)) return; // 打到一半不算数
+    const rgba = hexToRgba(value);
+    popHsv = { ...rgbToHsv(rgba), a: rgba.a };
+    paintPop({ fields: false });
+    applyPopColor();
+    return;
+  }
+
+  const n = Number(input.value);
+  if (!Number.isFinite(n)) return;
+  if (popMode === 'rgb') {
+    if (key === 'a') {
+      popHsv = { ...popHsv, a: clamp01(n / 100) };
+    } else {
+      const rgb = hsvToRgb(popHsv);
+      const next = { r: rgb.r, g: rgb.g, b: rgb.b, [key]: clamp01(n / 255) };
+      popHsv = { ...rgbToHsv(next), a: popHsv.a };
+    }
+  } else if (key === 'a') {
+    popHsv = { ...popHsv, a: clamp01(n / 100) };
+  } else if (key === 'h') {
+    popHsv = { ...popHsv, h: Math.min(360, Math.max(0, n)) };
+  } else if (key === 's') {
+    popHsv = { ...popHsv, s: clamp01(n / 100) };
+  } else if (key === 'v') {
+    popHsv = { ...popHsv, v: clamp01(n / 100) };
+  }
+  paintPop({ fields: false });
+  applyPopColor();
+});
+
+// 吸管：Chromium 才有（Firefox / Safari 上藏起来）
+if (!window.EyeDropper) pop.eyedropper.hidden = true;
+pop.eyedropper.addEventListener('click', async () => {
+  if (!window.EyeDropper) return;
+  try {
+    const { sRGBHex } = await new window.EyeDropper().open();
+    const rgba = hexToRgba(sRGBHex);
+    popHsv = { ...rgbToHsv(rgba), a: popHsv.a }; // 透明度沿用当前的
+    paintPop();
+    applyPopColor();
+  } catch {
+    /* 用户取消了取色 */
+  }
 });
 
 pop.hue.addEventListener('input', () => {

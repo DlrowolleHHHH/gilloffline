@@ -14,7 +14,7 @@
 | `server/store.js` | 数据模型、清洗（sanitize）、**不重叠修复**（保存时的最后防线） |
 | `web/js/shared.js` | 几何与布局核心：`applyGridLayout`、`packBoard`、`repairBoard`、`firstFreeSpot`、碰撞判断 |
 | `web/js/board.js` | 棋盘的交互与渲染：拖拽手势、网格吸附、ghost 预览、行数增长 |
-| `web/js/admin.js` | 管理页把两者接起来：工具条（列数/间隔/缩放）、抽屉、脏标记 |
+| `web/js/admin.js` | 管理页把两者接起来：工具条（列数/间隔/缩放）、抽屉（含**自绘取色面板**：SV 区 + 色相/透明度条 + HEX/RGB/HSV + 吸管）、脏标记 |
 | `web/js/home.js` | 主页：套用 `site` 设置（强调色、间隔、布局）并渲染；子管理员的站（`?userid=…`）还会亮出右上角那个 `#admin-entry`（`position: fixed` + `z-index: 40`，**故意压在**全屏嵌入 80/81 和提示条 60 下面） |
 | `web/css/admin.css` | `.admin-board`（棋盘容器）与 `.admin-board::before`（格线） |
 | `data/site.json` | 提交进仓库的种子数据，运行时只读（首次部署时复制到数据目录） |
@@ -51,6 +51,8 @@
   （粗细照旧占位），底色是「不铺」。走的是
   `safeColorOrNone()`；其余颜色字段（角标文字、详情配色）只能是 hex，空串会退回默认值。
   渲染时 `applyCellStyle` 把空串翻成 `transparent`。老数据全是 hex，行为不变。
+  取色面板是**自绘**的：原生 `<input type="color">` 弹的是浏览器/系统的窗口，里面塞不进
+  「透明」和自定义格式 —— 别再换回原生控件。
 - **封面 与 嵌入是两个字段**（别再把它们混起来）：`html` 是「封面的 HTML」，只在 `type: 'html'`
   的「网页封面」上用，直接铺在格子上渲染；`embed` 是「嵌入的 HTML」，三种类型都能有。
   有 `embed` 时 `createCell` 会把地址挂到 `dataset.fullscreen` 上并渲染那个放大角标 ——

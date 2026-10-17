@@ -747,7 +747,7 @@
 .color-pop {
   position: fixed;
   z-index: 50;
-  width: 232px;
+  width: 244px;
   padding: 12px;
   display: grid;
   gap: 10px;
@@ -835,10 +835,113 @@
   cursor: pointer;
 }
 
+/* HEX / RGB / HSV：三个小标签页 */
+.color-pop__modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--ink-900);
+}
+
+.color-pop__mode {
+  padding: 5px 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+
+.color-pop__mode:hover {
+  color: var(--text);
+}
+
+.color-pop__mode.is-on {
+  background: color-mix(in srgb, var(--accent) 30%, var(--ink-700));
+  color: var(--text);
+}
+
+/* 数值输入：HEX 一个整行，RGB/HSV 各四个小格 */
+.color-pop__fields {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+}
+
+.color-pop__field {
+  display: grid;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.color-pop__field input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--ink-900);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.color-pop__field input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* 数字框上下那对小箭头太挤了，收掉 */
+.color-pop__field input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.color-pop__field input[type='number']::-webkit-outer-spin-button,
+.color-pop__field input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .color-pop__foot {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 吸管 + 透明：两个图标按钮，一起靠右 */
+.color-pop__icon {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.16s, border-color 0.16s;
+}
+
+.color-pop__icon:hover,
+.color-pop__icon:focus-visible {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.color-pop__icon[hidden] {
+  display: none;
 }
 
 .color-pop__preview {
