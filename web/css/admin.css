@@ -703,22 +703,173 @@
   align-items: center;
 }
 
-/* 带「透明」按钮的颜色行：末尾多一格 */
-.color-row--none {
-  grid-template-columns: 48px minmax(0, 1fr) auto;
-}
-
 /*
- * 透明色按钮：业界通用的「无颜色」图标 —— 白底 + 一道红斜杠（Photoshop / Figma 那个）。
- * 高度跟着这一行走，和色板、文本框对齐。
+ * 色板按钮（取代 <input type="color">）：点开自绘的取色面板。
+ * 底色垫一层棋盘格，带透明度的颜色一眼看得出来。
  */
-.color-none {
-  width: 44px;
+.swatch {
+  width: 48px;
   height: 100%;
   min-height: 34px;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 10px;
+  cursor: pointer;
+  background-color: #2a2438;
+  background-image:
+    linear-gradient(var(--sw, transparent), var(--sw, transparent)),
+    linear-gradient(45deg, #4a4458 25%, transparent 25%, transparent 75%, #4a4458 75%),
+    linear-gradient(45deg, #4a4458 25%, transparent 25%, transparent 75%, #4a4458 75%);
+  background-position: 0 0, 0 0, 6px 6px;
+  background-size: auto, 12px 12px, 12px 12px;
+  transition: border-color 0.16s;
+}
+
+.swatch:hover,
+.swatch:focus-visible {
+  border-color: var(--accent);
+}
+
+/* 这一项是「透明」：整块换成红斜杠图标（和面板里那个透明色按钮一模一样） */
+.swatch--none {
+  background: linear-gradient(
+      to top right,
+      transparent calc(50% - 1px),
+      #e5484d calc(50% - 1px),
+      #e5484d calc(50% + 1px),
+      transparent calc(50% + 1px)
+    )
+    #fff;
+}
+
+/* ---------------------------------------------------------- 取色面板 */
+
+.color-pop {
+  position: fixed;
+  z-index: 50;
+  width: 232px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--ink-700);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.55);
+}
+
+.color-pop__sv {
+  position: relative;
+  height: 140px;
+  border-radius: 10px;
+  cursor: crosshair;
+  touch-action: none;
+  background:
+    linear-gradient(to top, #000, transparent),
+    linear-gradient(to right, #fff, hsl(var(--hue, 0) 100% 50%));
+}
+
+.color-pop__knob {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.color-pop__sliders {
+  display: grid;
+  gap: 8px;
+}
+
+.color-pop__range {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  outline: none;
+}
+
+.color-pop__range--hue {
+  background: linear-gradient(
+    to right,
+    #f00 0%,
+    #ff0 17%,
+    #0f0 33%,
+    #0ff 50%,
+    #00f 67%,
+    #f0f 83%,
+    #f00 100%
+  );
+}
+
+/* 不透明度：从透明到当前颜色，底下垫棋盘格 */
+.color-pop__range--alpha {
+  background-image:
+    linear-gradient(to right, transparent, var(--solid, #7e46b9)),
+    repeating-conic-gradient(#4a4458 0% 25%, #2a2438 0% 50%);
+  background-size: auto, 10px 10px;
+}
+
+.color-pop__range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #2a2438;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+
+.color-pop__range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #2a2438;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+
+.color-pop__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-pop__preview {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background-color: #2a2438;
+  background-image:
+    linear-gradient(var(--sw, transparent), var(--sw, transparent)),
+    linear-gradient(45deg, #4a4458 25%, transparent 25%, transparent 75%, #4a4458 75%),
+    linear-gradient(45deg, #4a4458 25%, transparent 25%, transparent 75%, #4a4458 75%);
+  background-position: 0 0, 0 0, 4px 4px;
+  background-size: auto, 8px 8px, 8px 8px;
+}
+
+.color-pop__value {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/*
+ * 透明色按钮：业界通用的「无颜色」图标 —— 白底 + 一道红斜杠（Photoshop / Figma 那个）。
+ */
+.color-none {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background:
     linear-gradient(
       to top right,
@@ -736,15 +887,10 @@
   border-color: color-mix(in srgb, var(--line) 40%, var(--text));
 }
 
-/* 选中的样子和分段控件一致：描边点亮 + 一圈光晕 */
+/* 当前就是透明：点亮描边 + 光晕 */
 .color-none[aria-pressed='true'] {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
-}
-
-/* 选了透明，色板就没意义了：灰掉，但留着上一个颜色，再按一下能回来 */
-.color-row input[type='color']:disabled {
-  opacity: 0.4;
 }
 
 .check {

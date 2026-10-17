@@ -424,7 +424,6 @@ const els = {
   radius: $('ed-radius'),
   borderColor: $('ed-border-color'),
   borderColorText: $('ed-border-color-text'),
-  borderColorNone: $('ed-border-color-none'),
   image: $('ed-image'),
   html: $('ed-html'),
   embed: $('ed-embed'),
@@ -434,7 +433,6 @@ const els = {
   imageTitleColorText: $('ed-image-title-color-text'),
   color: $('ed-color'),
   colorText: $('ed-color-text'),
-  colorNone: $('ed-color-none'),
   ovEnabled: $('ed-ov-enabled'),
   ovTitle: $('ed-ov-title'),
   ovBody: $('ed-ov-body'),
@@ -449,36 +447,218 @@ const els = {
 };
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-const sixDigit = (value) => (typeof value === 'string' && HEX.test(value) ? value.slice(0, 7) : '#000000');
 
-/**
- * 色板和文本框一起写。值为空（「无」）时色板留一个默认色而不是黑 —— 色板这时是灰掉的，
- * 但再按一下「无」把颜色拿回来时，拿到的就是站点自己的默认色，不是随手一个黑。
- */
-function setColorPicker(picker, text, value, fallback = '#7e46b9') {
-  picker.value = value ? sixDigit(value) : fallback;
+/** 色板上画出当前颜色。空串（透明）时换成红斜杠图标 —— 就是面板里那个透明色按钮。 */
+function paintSwatch(swatch) {
+  const value = swatch.dataset.color || '';
+  swatch.classList.toggle('swatch--none', value === '');
+  swatch.style.setProperty('--sw', value || 'transparent');
+}
+
+function setColorPicker(swatch, text, value, fallback = '#7e46b9') {
+  swatch.dataset.color = value || '';
+  swatch.dataset.fallback = fallback; // 点开面板时从这儿起步
+  paintSwatch(swatch);
   text.value = value || '';
 }
 
 /** The text field wins when it holds a valid hex literal, so 8-digit alpha works. */
-function readColorPicker(picker, text, fallback) {
-  return HEX.test(text.value.trim()) ? text.value.trim() : picker.value || fallback;
+function readColorPicker(swatch, text, fallback) {
+  return HEX.test(text.value.trim()) ? text.value.trim() : swatch.dataset.color || fallback;
 }
 
 /** 「透明」也算合法值的颜色行（边框颜色、底色）：文本空 = 这一项不填，存成空串。 */
-function readOptionalColor(picker, text, fallback) {
-  return text.value.trim() === '' ? '' : readColorPicker(picker, text, fallback);
+function readOptionalColor(swatch, text, fallback) {
+  return text.value.trim() === '' ? '' : readColorPicker(swatch, text, fallback);
 }
 
-/**
- * 同步透明色按钮和色板的状态。没有这个按钮的字段（角标文字、详情配色）传 undefined，
- * 那就什么都不做 —— 那些字段不能让文本空着，空着只会退回色板。
- */
-function setColorNone(button, picker, none) {
-  if (!button) return;
-  button.setAttribute('aria-pressed', String(none));
-  picker.disabled = none;
+/* -------------------------------------------------------------- 取色面板 */
+
+const pop = {
+  box: $('color-pop'),
+  sv: $('color-pop-sv'),
+  knob: $('color-pop-knob'),
+  hue: $('color-pop-hue'),
+  alpha: $('color-pop-alpha'),
+  preview: $('color-pop-preview'),
+  value: $('color-pop-value'),
+  none: $('color-pop-none'),
+};
+
+/** 面板正在调的那一行：{ swatch, text, allowNone }。 */
+let popTarget = null;
+let popHsv = { h: 0, s: 0, v: 0, a: 1 };
+let popDragging = false;
+
+const clamp01 = (n) => Math.min(1, Math.max(0, n));
+
+/** #rgb / #rrggbb / #rrggbbaa → 0..1 的 rgba。 */
+function hexToRgba(hex) {
+  const raw = hex.replace('#', '');
+  const full = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw;
+  return {
+    r: parseInt(full.slice(0, 2), 16) / 255,
+    g: parseInt(full.slice(2, 4), 16) / 255,
+    b: parseInt(full.slice(4, 6), 16) / 255,
+    a: full.length === 8 ? parseInt(full.slice(6, 8), 16) / 255 : 1,
+  };
 }
+
+function rgbToHsv({ r, g, b }) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d > 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: max > 0 ? d / max : 0, v: max };
+}
+
+function hsvToRgb({ h, s, v }) {
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  const [r, g, b] =
+    h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return { r: r + m, g: g + m, b: b + m };
+}
+
+/** 不透明度满时给 6 位，否则追加两位 alpha（和数据的 hex 格式一致）。 */
+function rgbaToHex({ r, g, b, a }) {
+  const part = (n) => Math.round(n * 255).toString(16).padStart(2, '0');
+  const base = `#${part(r)}${part(g)}${part(b)}`;
+  return a >= 1 ? base : `${base}${part(a)}`;
+}
+
+const popColor = () => rgbaToHex({ ...hsvToRgb(popHsv), a: popHsv.a });
+
+function paintPop() {
+  const solid = rgbaToHex({ ...hsvToRgb(popHsv), a: 1 });
+  pop.sv.style.setProperty('--hue', String(Math.round(popHsv.h)));
+  pop.knob.style.left = `${popHsv.s * 100}%`;
+  pop.knob.style.top = `${(1 - popHsv.v) * 100}%`;
+  pop.knob.style.background = solid;
+  pop.hue.value = String(Math.round(popHsv.h));
+  pop.alpha.value = String(Math.round(popHsv.a * 100));
+  pop.alpha.style.setProperty('--solid', solid);
+  pop.preview.style.setProperty('--sw', popColor());
+  pop.value.textContent = popColor();
+}
+
+/** 面板里的改动立刻写回表单和预览（拖动时每一帧都会被调用）。 */
+function applyPopColor() {
+  if (!popTarget) return;
+  const hex = popColor();
+  popTarget.swatch.dataset.color = hex;
+  paintSwatch(popTarget.swatch);
+  popTarget.text.value = hex;
+  pop.none.setAttribute('aria-pressed', 'false');
+  onEdited();
+}
+
+function moveSv(event) {
+  const box = pop.sv.getBoundingClientRect();
+  popHsv.s = clamp01((event.clientX - box.left) / box.width);
+  popHsv.v = 1 - clamp01((event.clientY - box.top) / box.height);
+  paintPop();
+  applyPopColor();
+}
+
+function positionPop(swatch) {
+  const rect = swatch.getBoundingClientRect();
+  const width = pop.box.offsetWidth;
+  const height = pop.box.offsetHeight;
+  // 贴在色板下面；下面放不下就翻到上面；两头都夹回视口里（抽屉滚动后色板可能在视野外）
+  const clampX = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+  const clampY = Math.max(8, window.innerHeight - height - 8);
+  let top = rect.bottom + 8;
+  if (top > clampY) top = rect.top - height - 8;
+  pop.box.style.left = `${clampX}px`;
+  pop.box.style.top = `${Math.min(Math.max(8, top), clampY)}px`;
+}
+
+function openColorPop(swatch, text, allowNone) {
+  const base = swatch.dataset.color || swatch.dataset.fallback || '#7e46b9';
+  const rgba = hexToRgba(base);
+  popHsv = { ...rgbToHsv(rgba), a: rgba.a };
+  popTarget = { swatch, text, allowNone };
+  pop.none.hidden = !allowNone; // 只有边框颜色、底色有「透明」这个值
+  pop.none.setAttribute('aria-pressed', String((swatch.dataset.color || '') === ''));
+  pop.box.hidden = false;
+  paintPop();
+  positionPop(swatch);
+}
+
+function closeColorPop() {
+  if (pop.box.hidden) return;
+  pop.box.hidden = true;
+  popDragging = false;
+  popTarget = null;
+}
+
+pop.sv.addEventListener('pointerdown', (event) => {
+  popDragging = true;
+  pop.sv.setPointerCapture(event.pointerId);
+  moveSv(event);
+  event.preventDefault();
+});
+pop.sv.addEventListener('pointermove', (event) => {
+  if (popDragging) moveSv(event);
+});
+pop.sv.addEventListener('pointerup', () => {
+  popDragging = false;
+});
+pop.sv.addEventListener('pointercancel', () => {
+  popDragging = false;
+});
+
+pop.hue.addEventListener('input', () => {
+  popHsv.h = Number(pop.hue.value);
+  paintPop();
+  applyPopColor();
+});
+pop.alpha.addEventListener('input', () => {
+  popHsv.a = Number(pop.alpha.value) / 100;
+  paintPop();
+  applyPopColor();
+});
+
+pop.none.addEventListener('click', () => {
+  if (!popTarget) return;
+  popTarget.swatch.dataset.color = '';
+  paintSwatch(popTarget.swatch);
+  popTarget.text.value = '';
+  pop.none.setAttribute('aria-pressed', 'true');
+  onEdited();
+  closeColorPop();
+});
+
+// 点到面板和色板以外、按 Esc、页面滚动或改窗口大小 → 收起来
+document.addEventListener(
+  'pointerdown',
+  (event) => {
+    if (pop.box.hidden) return;
+    if (pop.box.contains(event.target) || event.target.closest('.swatch')) return;
+    closeColorPop();
+  },
+  true
+);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !pop.box.hidden) {
+    // Esc 先收最里面这层（取色面板），抽屉留着。
+    // 这里必须 stopImmediatePropagation：抽屉的 Esc 处理也挂在 document 上，
+    // 普通 stopPropagation 拦不住同一个节点上的其它监听 —— 会连抽屉一起关掉。
+    closeColorPop();
+    event.stopImmediatePropagation();
+  }
+});
+window.addEventListener('resize', closeColorPop);
+$('drawer').addEventListener('scroll', closeColorPop, { passive: true });
 
 function buildSizeOptions() {
   els.sizes.replaceChildren();
@@ -551,11 +731,11 @@ function currentCell() {
 }
 
 function fillForm(cell) {
+  closeColorPop(); // 换了一颗格子，面板里调的就不是它了
   els.type.value = cell.type;
   els.borderWidth.value = cell.borderWidth;
   els.radius.value = cell.radius;
   setColorPicker(els.borderColor, els.borderColorText, cell.borderColor);
-  setColorNone(els.borderColorNone, els.borderColor, cell.borderColor === '');
   els.image.value = cell.image;
   els.html.value = cell.html || '';
   els.embed.value = cell.embed || '';
@@ -563,7 +743,6 @@ function fillForm(cell) {
   els.imageTitle.value = cell.imageTitle;
   setColorPicker(els.imageTitleColor, els.imageTitleColorText, cell.imageTitleColor);
   setColorPicker(els.color, els.colorText, cell.color);
-  setColorNone(els.colorNone, els.color, cell.color === '');
   els.ovEnabled.checked = cell.overlay.enabled;
   els.ovTitle.value = cell.overlay.title;
   els.ovBody.value = cell.overlay.body;
@@ -760,6 +939,7 @@ function openDrawer(id, { withSizes = false } = {}) {
 }
 
 function closeDrawer() {
+  closeColorPop();
   state.editingId = null;
   drawer.classList.remove('is-open');
   scrim.classList.remove('is-open');
@@ -836,33 +1016,29 @@ function bindEditor() {
     onEdited();
   });
 
-  for (const [picker, text, none] of [
-    [els.borderColor, els.borderColorText, els.borderColorNone],
-    [els.imageTitleColor, els.imageTitleColorText],
-    [els.color, els.colorText, els.colorNone],
-    [els.ovBg, els.ovBgText],
-    [els.ovFg, els.ovFgText],
+  // 每一行：点色板弹取色面板；文本框里手打 hex 也实时反映到色板上
+  for (const [swatch, text, allowNone] of [
+    [els.borderColor, els.borderColorText, true],
+    [els.imageTitleColor, els.imageTitleColorText, false],
+    [els.color, els.colorText, true],
+    [els.ovBg, els.ovBgText, false],
+    [els.ovFg, els.ovFgText, false],
   ]) {
-    picker.addEventListener('input', () => {
-      text.value = picker.value;
-      setColorNone(none, picker, false); // 手动挑了颜色就不再是透明
-      onEdited();
+    swatch.addEventListener('click', () => {
+      if (!pop.box.hidden && popTarget && popTarget.swatch === swatch) closeColorPop();
+      else openColorPop(swatch, text, allowNone);
     });
     text.addEventListener('input', () => {
       const value = text.value.trim();
-      if (HEX.test(value)) picker.value = sixDigit(value);
-      setColorNone(none, picker, value === '');
+      if (HEX.test(value)) {
+        swatch.dataset.color = value;
+        paintSwatch(swatch);
+      } else if (value === '' && allowNone) {
+        swatch.dataset.color = '';
+        paintSwatch(swatch);
+      }
       onEdited();
     });
-    if (none) {
-      // 透明色是个开关：按下去清空这一项，再按一下把上一个颜色拿回来（色板里还留着）
-      none.addEventListener('click', () => {
-        const off = none.getAttribute('aria-pressed') !== 'true';
-        text.value = off ? '' : picker.value;
-        setColorNone(none, picker, off);
-        onEdited();
-      });
-    }
   }
 
   $('drawer-close').addEventListener('click', closeDrawer);

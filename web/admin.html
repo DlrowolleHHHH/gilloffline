@@ -307,11 +307,9 @@
           </div>
           <div class="field">
             <label for="ed-border-color">边框颜色</label>
-            <div class="color-row color-row--none">
-              <input class="input" id="ed-border-color" type="color" />
+            <div class="color-row">
+              <button class="swatch" id="ed-border-color" type="button" aria-label="边框颜色：打开取色面板"></button>
               <input class="input" id="ed-border-color-text" type="text" spellcheck="false" placeholder="#7e46b9" />
-              <button class="color-none" id="ed-border-color-none" type="button" aria-pressed="false"
-                      aria-label="透明" title="透明（不画边框颜色；粗细仍占位）"></button>
             </div>
           </div>
         </fieldset>
@@ -366,7 +364,7 @@
           <div class="field">
             <label for="ed-image-title-color">角标文字颜色</label>
             <div class="color-row">
-              <input class="input" id="ed-image-title-color" type="color" />
+              <button class="swatch" id="ed-image-title-color" type="button" aria-label="角标文字颜色：打开取色面板"></button>
               <input class="input" id="ed-image-title-color-text" type="text" spellcheck="false" />
             </div>
           </div>
@@ -376,11 +374,9 @@
           <legend>纯色</legend>
           <div class="field">
             <label for="ed-color">底色</label>
-            <div class="color-row color-row--none">
-              <input class="input" id="ed-color" type="color" />
+            <div class="color-row">
+              <button class="swatch" id="ed-color" type="button" aria-label="底色：打开取色面板"></button>
               <input class="input" id="ed-color-text" type="text" spellcheck="false" />
-              <button class="color-none" id="ed-color-none" type="button" aria-pressed="false"
-                      aria-label="透明" title="透明（不铺底色，露出页面背景）"></button>
             </div>
           </div>
         </fieldset>
@@ -412,14 +408,14 @@
           <div class="field">
             <label for="ed-ov-bg">详情背景色</label>
             <div class="color-row">
-              <input class="input" id="ed-ov-bg" type="color" />
+              <button class="swatch" id="ed-ov-bg" type="button" aria-label="详情背景色：打开取色面板"></button>
               <input class="input" id="ed-ov-bg-text" type="text" spellcheck="false" />
             </div>
           </div>
           <div class="field">
             <label for="ed-ov-fg">详情文字颜色</label>
             <div class="color-row">
-              <input class="input" id="ed-ov-fg" type="color" />
+              <button class="swatch" id="ed-ov-fg" type="button" aria-label="详情文字颜色：打开取色面板"></button>
               <input class="input" id="ed-ov-fg-text" type="text" spellcheck="false" />
             </div>
           </div>
@@ -476,6 +472,29 @@
         <button class="btn btn--primary" id="ed-done" type="button">完成</button>
       </div>
     </aside>
+
+    <!--
+      取色面板：点色板弹出。系统原生的 <input type="color"> 是浏览器自己的窗口，
+      里面塞不进「透明」，所以这块自己画。最下面那个红斜杠方块 = 透明（只有
+      边框颜色、底色这两行显示它 —— 其它颜色字段没有「空」这个值）。
+    -->
+    <div class="color-pop" id="color-pop" hidden role="dialog" aria-label="取色面板">
+      <div class="color-pop__sv" id="color-pop-sv">
+        <span class="color-pop__knob" id="color-pop-knob"></span>
+      </div>
+      <div class="color-pop__sliders">
+        <input class="color-pop__range color-pop__range--hue" id="color-pop-hue" type="range"
+               min="0" max="360" step="1" aria-label="色相" />
+        <input class="color-pop__range color-pop__range--alpha" id="color-pop-alpha" type="range"
+               min="0" max="100" step="1" aria-label="不透明度" />
+      </div>
+      <div class="color-pop__foot">
+        <span class="color-pop__preview" id="color-pop-preview"></span>
+        <code class="color-pop__value" id="color-pop-value"></code>
+        <button class="color-none" id="color-pop-none" type="button" aria-label="透明"
+                title="透明（不设颜色）"></button>
+      </div>
+    </div>
 
     <script type="module" src="/js/admin.js"></script>
   </body>
