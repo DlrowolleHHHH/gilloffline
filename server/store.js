@@ -101,6 +101,14 @@ function safeColor(value, fallback) {
     : fallback;
 }
 
+/**
+ * 颜色字段：合法 hex 照旧；**空串表示「无」**（不画边框 / 不铺底色）；
+ * 其余（缺字段、写坏了）退回默认值。老数据全是 hex，行为不变。
+ */
+function safeColorOrNone(value, fallback) {
+  return value === '' ? '' : safeColor(value, fallback);
+}
+
 function safeNumber(value, min, max, fallback) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
@@ -196,7 +204,7 @@ function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
     id: typeof src.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(src.id) ? src.id : newId(),
     type,
     size: oneOf(src.size, SIZES, '1x1'),
-    borderColor: safeColor(src.borderColor, '#7e46b9'),
+    borderColor: safeColorOrNone(src.borderColor, '#7e46b9'),
     borderWidth: safeNumber(src.borderWidth, 0, 20, 2),
     radius: safeNumber(src.radius, 0, 64, 14),
     // image cells
@@ -205,7 +213,7 @@ function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
     imageTitle: clampText(src.imageTitle, MAX_TITLE),
     imageTitleColor: safeColor(src.imageTitleColor, '#ffffff'),
     // solid cells
-    color: safeColor(src.color, '#7e46b9'),
+    color: safeColorOrNone(src.color, '#7e46b9'),
     // 「网页封面」那张页面：直接铺在格子上渲染（多半是个带动画的 HTML）
     html: safePageUrl(src.html),
     // 「嵌入的页面」：任何类型都能再嵌一个，和封面是两回事 ——

@@ -424,6 +424,7 @@ const els = {
   radius: $('ed-radius'),
   borderColor: $('ed-border-color'),
   borderColorText: $('ed-border-color-text'),
+  borderColorNone: $('ed-border-color-none'),
   image: $('ed-image'),
   html: $('ed-html'),
   embed: $('ed-embed'),
@@ -433,6 +434,7 @@ const els = {
   imageTitleColorText: $('ed-image-title-color-text'),
   color: $('ed-color'),
   colorText: $('ed-color-text'),
+  colorNone: $('ed-color-none'),
   ovEnabled: $('ed-ov-enabled'),
   ovTitle: $('ed-ov-title'),
   ovBody: $('ed-ov-body'),
@@ -449,14 +451,33 @@ const els = {
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const sixDigit = (value) => (typeof value === 'string' && HEX.test(value) ? value.slice(0, 7) : '#000000');
 
-function setColorPicker(picker, text, value) {
-  picker.value = sixDigit(value);
+/**
+ * 色板和文本框一起写。值为空（「无」）时色板留一个默认色而不是黑 —— 色板这时是灰掉的，
+ * 但再按一下「无」把颜色拿回来时，拿到的就是站点自己的默认色，不是随手一个黑。
+ */
+function setColorPicker(picker, text, value, fallback = '#7e46b9') {
+  picker.value = value ? sixDigit(value) : fallback;
   text.value = value || '';
 }
 
 /** The text field wins when it holds a valid hex literal, so 8-digit alpha works. */
 function readColorPicker(picker, text, fallback) {
   return HEX.test(text.value.trim()) ? text.value.trim() : picker.value || fallback;
+}
+
+/** 「无」也算合法值的颜色行（边框颜色、底色）：文本空 = 这一项不填，存成空串。 */
+function readOptionalColor(picker, text, fallback) {
+  return text.value.trim() === '' ? '' : readColorPicker(picker, text, fallback);
+}
+
+/**
+ * 同步「无」按钮和色板的状态。没有这个按钮的字段（角标文字、详情配色）传 undefined，
+ * 那就什么都不做 —— 那些字段不能让文本空着，空着只会退回色板。
+ */
+function setColorNone(button, picker, none) {
+  if (!button) return;
+  button.setAttribute('aria-pressed', String(none));
+  picker.disabled = none;
 }
 
 function buildSizeOptions() {
@@ -534,6 +555,7 @@ function fillForm(cell) {
   els.borderWidth.value = cell.borderWidth;
   els.radius.value = cell.radius;
   setColorPicker(els.borderColor, els.borderColorText, cell.borderColor);
+  setColorNone(els.borderColorNone, els.borderColor, cell.borderColor === '');
   els.image.value = cell.image;
   els.html.value = cell.html || '';
   els.embed.value = cell.embed || '';
@@ -541,6 +563,7 @@ function fillForm(cell) {
   els.imageTitle.value = cell.imageTitle;
   setColorPicker(els.imageTitleColor, els.imageTitleColorText, cell.imageTitleColor);
   setColorPicker(els.color, els.colorText, cell.color);
+  setColorNone(els.colorNone, els.color, cell.color === '');
   els.ovEnabled.checked = cell.overlay.enabled;
   els.ovTitle.value = cell.overlay.title;
   els.ovBody.value = cell.overlay.body;
@@ -618,7 +641,7 @@ function applyForm() {
   cell.type = els.type.value;
   cell.borderWidth = Number(els.borderWidth.value) || 0;
   cell.radius = Number(els.radius.value) || 0;
-  cell.borderColor = readColorPicker(els.borderColor, els.borderColorText, '#7e46b9');
+  cell.borderColor = readOptionalColor(els.borderColor, els.borderColorText, '#7e46b9');
   cell.image = els.image.value.trim();
   cell.html = els.html.value.trim();
   // 两个地址都存下来（互斥只体现在 clickMode 上），填过的内容不会因为切换而丢
@@ -627,7 +650,7 @@ function applyForm() {
   cell.imageFit = els.fit.value;
   cell.imageTitle = els.imageTitle.value;
   cell.imageTitleColor = readColorPicker(els.imageTitleColor, els.imageTitleColorText, '#ffffff');
-  cell.color = readColorPicker(els.color, els.colorText, '#7e46b9');
+  cell.color = readOptionalColor(els.color, els.colorText, '#7e46b9');
   cell.overlay = {
     enabled: els.ovEnabled.checked,
     title: els.ovTitle.value,
@@ -813,21 +836,33 @@ function bindEditor() {
     onEdited();
   });
 
-  for (const [picker, text] of [
-    [els.borderColor, els.borderColorText],
+  for (const [picker, text, none] of [
+    [els.borderColor, els.borderColorText, els.borderColorNone],
     [els.imageTitleColor, els.imageTitleColorText],
-    [els.color, els.colorText],
+    [els.color, els.colorText, els.colorNone],
     [els.ovBg, els.ovBgText],
     [els.ovFg, els.ovFgText],
   ]) {
     picker.addEventListener('input', () => {
       text.value = picker.value;
+      setColorNone(none, picker, false); // 手动挑了颜色就不再是「无」
       onEdited();
     });
     text.addEventListener('input', () => {
-      if (HEX.test(text.value.trim())) picker.value = sixDigit(text.value.trim());
+      const value = text.value.trim();
+      if (HEX.test(value)) picker.value = sixDigit(value);
+      setColorNone(none, picker, value === '');
       onEdited();
     });
+    if (none) {
+      // 「无」是个开关：按下去清空这一项，再按一下把上一个颜色拿回来（色板里还留着）
+      none.addEventListener('click', () => {
+        const off = none.getAttribute('aria-pressed') !== 'true';
+        text.value = off ? '' : picker.value;
+        setColorNone(none, picker, off);
+        onEdited();
+      });
+    }
   }
 
   $('drawer-close').addEventListener('click', closeDrawer);

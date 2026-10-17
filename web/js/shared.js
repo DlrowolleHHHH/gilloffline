@@ -108,9 +108,10 @@ export function cellClasses(cell) {
 export function applyCellStyle(node, cell) {
   node.style.setProperty('--radius', `${cell.radius}px`);
   node.style.setProperty('--bw', `${cell.borderWidth}px`);
-  node.style.setProperty('--border', cell.borderColor);
+  // 空串 = 无：边框还在（粗细占位不变），只是不画颜色；底色则是整块透明
+  node.style.setProperty('--border', cell.borderColor || 'transparent');
   node.style.setProperty('--caption-fg', cell.imageTitleColor);
-  if (cell.type === 'solid') node.style.setProperty('--solid', cell.color);
+  if (cell.type === 'solid') node.style.setProperty('--solid', cell.color || 'transparent');
 }
 
 /**

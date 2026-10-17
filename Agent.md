@@ -46,6 +46,10 @@
   （`SIZE_UNITS` 在 `server/store.js`，`SIZES` 在两边各有一份，必须同步）。字符串解析它是坑，别做。
   两者**互不派生**：棋盘用 `pos`，flow 用 `size`；`cellUnits()` 已经处理好（有 `pos` 就用 `pos`）。
 - `pos` 在 flow 文档里也会被保留（`normalizeCell` 两种布局都存）：来回切换布局不能丢摆位。
+- **颜色字段有两种「空」**：`borderColor` / `color`（纯色封面那条底色）**允许空串**，
+  表示「无」—— 边框是「不画这条边」（粗细照旧占位），底色是「不铺」。走的是
+  `safeColorOrNone()`；其余颜色字段（角标文字、详情配色）只能是 hex，空串会退回默认值。
+  渲染时 `applyCellStyle` 把空串翻成 `transparent`。老数据全是 hex，行为不变。
 - **封面 与 嵌入是两个字段**（别再把它们混起来）：`html` 是「封面的 HTML」，只在 `type: 'html'`
   的「网页封面」上用，直接铺在格子上渲染；`embed` 是「嵌入的 HTML」，三种类型都能有。
   有 `embed` 时 `createCell` 会把地址挂到 `dataset.fullscreen` 上并渲染那个放大角标 ——

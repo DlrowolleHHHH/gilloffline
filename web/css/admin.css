@@ -703,6 +703,26 @@
   align-items: center;
 }
 
+/* 「无」也是合法值的行：末尾多一个按钮 */
+.color-row--none {
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+}
+
+.btn--none {
+  padding: 8px 12px;
+}
+
+.btn--none[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--ink-700));
+  color: var(--text);
+}
+
+/* 选了「无」，色板就没意义了：灰掉，但留着上一个颜色，再按一下能回来 */
+.color-row input[type='color']:disabled {
+  opacity: 0.4;
+}
+
 .check {
   display: flex;
   align-items: center;
