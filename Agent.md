@@ -251,7 +251,7 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 | 点过带链接的格子，鼠标挪开详情面板还挂着 | 展开面板的规则里有 `.cell:focus-within`，而鼠标点一下同样会给格子（`tabIndex = 0`）或它里面的 `<a>` 焦点 —— 焦点不散，面板不关。要用 `:focus-visible`（只有键盘算），别用 `:focus-within` |
 | 从别的页面回来，详情面板还是开着的 | 触屏留下的 `.is-open` 跟着 DOM 一起被 bfcache 端回来；而链接是 `target="_blank"`，原页面压根没走过，纯粹是「没人清」。`pageshow` 里清一次（顺手摘掉格子上的焦点），「进去」那一下也把 `.is-open` 收掉 |
 | 手机上整块棋盘都翻不动 | `.board__slot` 一律 `touch-action: none`：格子铺满屏幕，等于整屏都是死区。只有真正的抓取点（`.slot__handle`）该拦，本体要交还给浏览器 |
-| 全屏展开时嵌页只有 300×150 | iframe 是**替换元素**：`position: absolute` + `left/top/right/bottom` 不会把它撑开，宽高必须自己用 `calc(100% - left - right)` 算 |
+| 全屏展开时嵌页只有 300×150，或留白只在左右生效 | iframe 是**替换元素**：`position: absolute` + `left/top/right/bottom` 不会把它撑开（退回 300×150），百分比高度在 `calc()` 里各浏览器也不一致。**留白要加在外层普通 div（`.fullscreen__area`）上，iframe 在里面 `100%` 铺满** |
 | 按 Esc 收取色面板，连抽屉一起关了 | 抽屉的 Esc 处理和面板的都挂在 `document` 上；`stopPropagation()` 挡不住同一个节点上的其它监听，要用 `stopImmediatePropagation()`（面板那个先注册，先跑） |
 | 点「尺寸」把格子的点击行为改了 | `bindActionTabs()` 原来扫全页的 `.segmented__btn`；棋盘上方新加的那组也是这个类，被一起接上了。**分组控件的选择器要带容器**（现在扫 `#action-tabs`） |
 

@@ -260,18 +260,21 @@
   will-change: transform, opacity;
 }
 
-.fullscreen__frame {
-  /*
-   * 四边留白由 JS 写成 --fs-*；默认 0 = 铺满整屏（老站点逐像素不变）。
-   * iframe 是替换元素：只给 left/top/right/bottom 不会拉伸（它会退回 300×150 的
-   * 固有尺寸），宽高必须自己算。
-   */
+/*
+ * 四边留白由 JS 写成 --fs-*；默认 0 = 铺满整屏（老站点逐像素不变）。
+ * 留白加在这一层 div 上：普通块用 inset 就能撑开。iframe 是替换元素，
+ * 直接给它 inset / calc 尺寸在不同浏览器里规则不一（只给 inset 会退回 300×150），
+ * 所以让它在这里面铺满 100%。
+ */
+.fullscreen__area {
   position: absolute;
-  left: var(--fs-left, 0px);
-  top: var(--fs-top, 0px);
-  width: calc(100% - var(--fs-left, 0px) - var(--fs-right, 0px));
-  height: calc(100% - var(--fs-top, 0px) - var(--fs-bottom, 0px));
+  inset: var(--fs-top, 0px) var(--fs-right, 0px) var(--fs-bottom, 0px) var(--fs-left, 0px);
+}
+
+.fullscreen__frame {
   display: block;
+  width: 100%;
+  height: 100%;
   border: 0;
   background: #fff; /* 页面自己没设底色时，别透出站点的深色 */
 }

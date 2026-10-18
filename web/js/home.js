@@ -198,9 +198,14 @@ function openFullscreen(url, title, rect, options = {}) {
   box.style.setProperty('--fs-bottom', `${bottom}px`);
   box.style.setProperty('--fs-left', `${left}px`);
   if (options.color) box.style.setProperty('--fs-color', options.color);
+  // 留白交给这层普通的 div（inset 就能撑开）；iframe 在里面铺满 100%。
+  // 不直接把 inset/calc 写在 iframe 上：它是替换元素，各浏览器的尺寸规则不一样，容易踩坑。
+  const area = document.createElement('div');
+  area.className = 'fullscreen__area';
   const frame = sharedCreateFrame(url, title);
   frame.className = 'fullscreen__frame';
   frame.loading = 'eager'; // 这回是真要看它了
+  area.append(frame);
 
   const close = document.createElement('button');
   close.type = 'button';
@@ -215,7 +220,7 @@ function openFullscreen(url, title, rect, options = {}) {
     if (event.target === box) closeFullscreen();
   });
 
-  box.append(frame, close);
+  box.append(area, close);
   // 先摆成格子的大小和位置，下一帧再回到满屏 —— CSS 的 transition 负责补这一路
   fullscreenFrom = zoomFrom(rect);
   if (fullscreenFrom) {
@@ -246,7 +251,7 @@ grid.addEventListener('keydown', (event) => {
   if (!cell || !cell.dataset.fullscreen) return;
   event.preventDefault();
   openFullscreen(cell.dataset.fullscreen, cell.querySelector('.cell__caption')?.textContent || '',
-    expand.getBoundingClientRect(), fullscreenOptions(cell));
+    cell.getBoundingClientRect(), fullscreenOptions(cell));
 });
 
 /*
@@ -279,8 +284,9 @@ grid.addEventListener('click', (event) => {
   if (fullscreen && (badge || !touch)) {
     event.preventDefault();
     closeOpenCells();
+    // 不管点的是格子还是右下角的角标，都从整颗格子放大 —— 两条路的手感要一样
     openFullscreen(fullscreen, cell.querySelector('.cell__caption')?.textContent || '',
-      (badge || cell).getBoundingClientRect(), fullscreenOptions(cell));
+      cell.getBoundingClientRect(), fullscreenOptions(cell));
     return;
   }
 
