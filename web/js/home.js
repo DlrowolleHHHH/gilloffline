@@ -146,7 +146,7 @@ async function boot() {
  * 页面在后台一起跑），关掉之后页面里的脚本和定时器也随 iframe 一起没了。
  */
 /** 和 showcase.css 里那条 transition 的时长一致（关的时候等它演完再摘掉 iframe）。 */
-const FULLSCREEN_MS = 420;
+const FULLSCREEN_MS = 460;
 let fullscreen = null;
 /** 关掉时要缩回哪儿（没记就淡出）。 */
 let fullscreenFrom = '';
