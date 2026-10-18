@@ -254,9 +254,13 @@
   z-index: 80;
   /* 留白色由 JS 按格子的设置写进 --fs-color；默认和以前一样是深色 */
   background: var(--fs-color, var(--ink-900, #08070d));
-  /* 打开/关闭都是「从格子那儿放大出来、再缩回去」，JS 只负责给出首尾两帧 */
+  /*
+   * 打开/关闭都是「从格子中心长出来、再缩回去」，JS 只负责给出首尾两帧。
+   * 曲线用的是「快起、长尾」的 ease-out：起步果断，最后一段慢慢收住，看着更顺。
+   * 时长改了记得同步 home.js 的 FULLSCREEN_MS（关的时候靠它决定什么时候摘 iframe）。
+   */
   transform-origin: center center;
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.24s ease;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
   will-change: transform, opacity;
 }
 

@@ -145,18 +145,26 @@ async function boot() {
  * iframe 是**打开时创建、关掉就移除**的：没点开的格子不加载页面（省流量，也免得几个
  * 页面在后台一起跑），关掉之后页面里的脚本和定时器也随 iframe 一起没了。
  */
-const FULLSCREEN_MS = 300;
+/** 和 showcase.css 里那条 transition 的时长一致（关的时候等它演完再摘掉 iframe）。 */
+const FULLSCREEN_MS = 420;
 let fullscreen = null;
 /** 关掉时要缩回哪儿（没记就淡出）。 */
 let fullscreenFrom = '';
 
-/** 从格子的矩形算出一个「就这么大、在那个位置」的起始变换（等比，取宽度算缩放）。 */
+/**
+ * 从格子的矩形算出起始变换：把整块全屏层缩到和格子**严丝合缝**、中心对齐。
+ *
+ * 横竖各自算缩放（而不是等比取宽度）：等比的话高度对不上 —— 视口和格子长宽比不一样，
+ * 第一帧就会比格子高出一截，看着像「从一块更大的地方弹出来」，不是从格子里长出来的。
+ * transform-origin 是中心，所以这一缩放就是「从格子中心往外扩」。
+ */
 function zoomFrom(rect) {
-  if (!rect || !rect.width) return '';
+  if (!rect || !rect.width || !rect.height) return '';
   const dx = rect.left + rect.width / 2 - window.innerWidth / 2;
   const dy = rect.top + rect.height / 2 - window.innerHeight / 2;
-  const scale = Math.max(0.05, Math.min(1, rect.width / window.innerWidth));
-  return `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${scale.toFixed(3)})`;
+  const sx = Math.max(0.02, Math.min(1, rect.width / window.innerWidth));
+  const sy = Math.max(0.02, Math.min(1, rect.height / window.innerHeight));
+  return `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`;
 }
 
 function closeFullscreen() {
