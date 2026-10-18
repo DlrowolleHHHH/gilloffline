@@ -71,6 +71,8 @@ const MAX_COLS = 12;
 const MIN_BOARD_COLS = 3;
 const DEFAULT_BOARD_COLS = 12;
 const MAX_CELL_UNITS = 12;
+/** 全屏展开时四边留白的上限（px）。 */
+const MAX_FS_MARGIN = 240;
 
 /**
  * 窄屏重排（只有棋盘布局用得上）：视口低于阈值时，把格子按顺序紧密重排成这么多列。
@@ -156,6 +158,18 @@ function newId() {
 
 /* ------------------------------------------------------------- normalizing */
 
+/** 全屏展开时的四边留白和留白色（0 = 铺满，和以前一样）。 */
+function normalizeFullscreen(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  return {
+    top: safeNumber(src.top, 0, MAX_FS_MARGIN, 0),
+    right: safeNumber(src.right, 0, MAX_FS_MARGIN, 0),
+    bottom: safeNumber(src.bottom, 0, MAX_FS_MARGIN, 0),
+    left: safeNumber(src.left, 0, MAX_FS_MARGIN, 0),
+    color: safeColor(src.color, '#08070d'),
+  };
+}
+
 function normalizeOverlay(raw) {
   const src = raw && typeof raw === 'object' ? raw : {};
   return {
@@ -225,6 +239,7 @@ function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
     // shared
     link: safeUrl(src.link),
     overlay: normalizeOverlay(src.overlay),
+    fullscreen: normalizeFullscreen(src.fullscreen),
   };
 
   // Positions are kept in both layouts: a flow doc that has been on a board must

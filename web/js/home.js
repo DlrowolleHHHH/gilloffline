@@ -177,10 +177,27 @@ function closeFullscreen() {
   }, FULLSCREEN_MS);
 }
 
-function openFullscreen(url, title, rect) {
+/**
+ * 全屏展开时这颗格子自己的设置：四边留白 + 留白色，由 createCell 挂在 dataset 上。
+ * 留白 0（默认）就是铺满整屏，和以前一样。
+ */
+function fullscreenOptions(cell) {
+  const [top, right, bottom, left] = (cell.dataset.fsMargin || '0,0,0,0')
+    .split(',')
+    .map((n) => Number(n) || 0);
+  return { margin: [top, right, bottom, left], color: cell.dataset.fsColor || '' };
+}
+
+function openFullscreen(url, title, rect, options = {}) {
   closeFullscreen();
   const box = document.createElement('div');
   box.className = 'fullscreen';
+  const [top, right, bottom, left] = options.margin || [0, 0, 0, 0];
+  box.style.setProperty('--fs-top', `${top}px`);
+  box.style.setProperty('--fs-right', `${right}px`);
+  box.style.setProperty('--fs-bottom', `${bottom}px`);
+  box.style.setProperty('--fs-left', `${left}px`);
+  if (options.color) box.style.setProperty('--fs-color', options.color);
   const frame = sharedCreateFrame(url, title);
   frame.className = 'fullscreen__frame';
   frame.loading = 'eager'; // 这回是真要看它了
@@ -192,6 +209,11 @@ function openFullscreen(url, title, rect) {
   close.setAttribute('aria-label', '关闭全屏');
   close.textContent = '✕';
   close.addEventListener('click', closeFullscreen);
+
+  // 点留白（页面外面那圈）也能关掉 —— 有了边距以后那是块显眼的空地
+  box.addEventListener('click', (event) => {
+    if (event.target === box) closeFullscreen();
+  });
 
   box.append(frame, close);
   // 先摆成格子的大小和位置，下一帧再回到满屏 —— CSS 的 transition 负责补这一路
@@ -224,7 +246,7 @@ grid.addEventListener('keydown', (event) => {
   if (!cell || !cell.dataset.fullscreen) return;
   event.preventDefault();
   openFullscreen(cell.dataset.fullscreen, cell.querySelector('.cell__caption')?.textContent || '',
-    expand.getBoundingClientRect());
+    expand.getBoundingClientRect(), fullscreenOptions(cell));
 });
 
 /*
@@ -258,7 +280,7 @@ grid.addEventListener('click', (event) => {
     event.preventDefault();
     closeOpenCells();
     openFullscreen(fullscreen, cell.querySelector('.cell__caption')?.textContent || '',
-      (badge || cell).getBoundingClientRect());
+      (badge || cell).getBoundingClientRect(), fullscreenOptions(cell));
     return;
   }
 
@@ -276,7 +298,7 @@ grid.addEventListener('click', (event) => {
     event.preventDefault();
     closeOpenCells();
     openFullscreen(fullscreen, cell.querySelector('.cell__caption')?.textContent || '',
-      cell.getBoundingClientRect());
+      cell.getBoundingClientRect(), fullscreenOptions(cell));
     return;
   }
   if (cell.tagName === 'A') {

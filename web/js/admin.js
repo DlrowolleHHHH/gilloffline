@@ -431,6 +431,12 @@ const els = {
   imageTitle: $('ed-image-title'),
   imageTitleColor: $('ed-image-title-color'),
   imageTitleColorText: $('ed-image-title-color-text'),
+  fsTop: $('ed-fs-top'),
+  fsRight: $('ed-fs-right'),
+  fsBottom: $('ed-fs-bottom'),
+  fsLeft: $('ed-fs-left'),
+  fsColor: $('ed-fs-color'),
+  fsColorText: $('ed-fs-color-text'),
   color: $('ed-color'),
   colorText: $('ed-color-text'),
   ovEnabled: $('ed-ov-enabled'),
@@ -877,6 +883,12 @@ function fillForm(cell) {
   els.imageTitle.value = cell.imageTitle;
   setColorPicker(els.imageTitleColor, els.imageTitleColorText, cell.imageTitleColor);
   setColorPicker(els.color, els.colorText, cell.color);
+  const fs = cell.fullscreen || {};
+  els.fsTop.value = fs.top ?? 0;
+  els.fsRight.value = fs.right ?? 0;
+  els.fsBottom.value = fs.bottom ?? 0;
+  els.fsLeft.value = fs.left ?? 0;
+  setColorPicker(els.fsColor, els.fsColorText, fs.color || '#08070d');
   els.ovEnabled.checked = cell.overlay.enabled;
   els.ovTitle.value = cell.overlay.title;
   els.ovBody.value = cell.overlay.body;
@@ -964,6 +976,14 @@ function applyForm() {
   cell.imageTitle = els.imageTitle.value;
   cell.imageTitleColor = readColorPicker(els.imageTitleColor, els.imageTitleColorText, '#ffffff');
   cell.color = readOptionalColor(els.color, els.colorText, '#7e46b9');
+  const margin = (input) => Math.min(240, Math.max(0, Math.round(Number(input.value) || 0)));
+  cell.fullscreen = {
+    top: margin(els.fsTop),
+    right: margin(els.fsRight),
+    bottom: margin(els.fsBottom),
+    left: margin(els.fsLeft),
+    color: readColorPicker(els.fsColor, els.fsColorText, '#08070d'),
+  };
   cell.overlay = {
     enabled: els.ovEnabled.checked,
     title: els.ovTitle.value,
@@ -1142,6 +1162,7 @@ function bindEditor() {
     els.type, els.borderWidth, els.radius, els.image, els.html, els.embed, els.fit,
     els.imageTitle, els.color, els.color, els.ovEnabled, els.ovTitle, els.ovBody,
     els.ovDir, els.ovRatio, els.link,
+    els.fsTop, els.fsRight, els.fsBottom, els.fsLeft,
   ];
   for (const element of new Set(live)) element.addEventListener('input', onEdited);
 
@@ -1157,6 +1178,7 @@ function bindEditor() {
     [els.color, els.colorText, true],
     [els.ovBg, els.ovBgText, false],
     [els.ovFg, els.ovFgText, false],
+    [els.fsColor, els.fsColorText, false],
   ]) {
     swatch.addEventListener('click', () => {
       if (!pop.box.hidden && popTarget && popTarget.swatch === swatch) closeColorPop();

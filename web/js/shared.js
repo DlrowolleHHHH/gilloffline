@@ -51,6 +51,11 @@ export function defaultOverlay() {
   };
 }
 
+/** 全屏展开的默认观感：铺满、深色留白。 */
+export function defaultFullscreen() {
+  return { top: 0, right: 0, bottom: 0, left: 0, color: '#08070d' };
+}
+
 export function defaultCell(overrides = {}) {
   return {
     id: newId(),
@@ -67,6 +72,7 @@ export function defaultCell(overrides = {}) {
     html: '',
     link: '',
     overlay: defaultOverlay(),
+    fullscreen: defaultFullscreen(),
     ...overrides,
   };
 }
@@ -206,6 +212,10 @@ export function createCell(cell) {
    */
   if (clickEmbed) {
     node.dataset.fullscreen = clickEmbed;
+    // 全屏展开时的四边留白和留白色（主页 openFullscreen 读它）
+    const fs = cell.fullscreen || defaultFullscreen();
+    node.dataset.fsMargin = [fs.top, fs.right, fs.bottom, fs.left].map((n) => Number(n) || 0).join(',');
+    node.dataset.fsColor = fs.color || defaultFullscreen().color;
     const expand = document.createElement('span');
     expand.className = 'cell__expand';
     expand.setAttribute('role', 'button');

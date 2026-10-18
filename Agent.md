@@ -46,6 +46,10 @@
   （`SIZE_UNITS` 在 `server/store.js`，`SIZES` 在两边各有一份，必须同步）。字符串解析它是坑，别做。
   两者**互不派生**：棋盘用 `pos`，flow 用 `size`；`cellUnits()` 已经处理好（有 `pos` 就用 `pos`）。
 - `pos` 在 flow 文档里也会被保留（`normalizeCell` 两种布局都存）：来回切换布局不能丢摆位。
+- **全屏展开的设置挂在 `cell.fullscreen` 上**：`{ top, right, bottom, left, color }`，
+  只有 `embed` 生效时才有意义。四边留白 0（默认）= 铺满整屏 = 老行为。渲染时 `createCell` 把四个值
+  和颜色写到格子的 `data-fs-*` 上，主页 `openFullscreen()` 照着写 `--fs-*` CSS 变量；
+  角标、键盘展开、点格子这三条路都走 `fullscreenOptions(cell)`，别各写一份。
 - **颜色字段有两种「空」**：`borderColor` / `color`（纯色封面那条底色）**允许空串**，
   表示「透明 / 无」（抽屉里点色板弹出取色面板，面板右下角那个红斜杠方块）—— 边框是「不画这条边」
   （粗细照旧占位），底色是「不铺」。走的是
@@ -247,6 +251,7 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 | 点过带链接的格子，鼠标挪开详情面板还挂着 | 展开面板的规则里有 `.cell:focus-within`，而鼠标点一下同样会给格子（`tabIndex = 0`）或它里面的 `<a>` 焦点 —— 焦点不散，面板不关。要用 `:focus-visible`（只有键盘算），别用 `:focus-within` |
 | 从别的页面回来，详情面板还是开着的 | 触屏留下的 `.is-open` 跟着 DOM 一起被 bfcache 端回来；而链接是 `target="_blank"`，原页面压根没走过，纯粹是「没人清」。`pageshow` 里清一次（顺手摘掉格子上的焦点），「进去」那一下也把 `.is-open` 收掉 |
 | 手机上整块棋盘都翻不动 | `.board__slot` 一律 `touch-action: none`：格子铺满屏幕，等于整屏都是死区。只有真正的抓取点（`.slot__handle`）该拦，本体要交还给浏览器 |
+| 全屏展开时嵌页只有 300×150 | iframe 是**替换元素**：`position: absolute` + `left/top/right/bottom` 不会把它撑开，宽高必须自己用 `calc(100% - left - right)` 算 |
 | 按 Esc 收取色面板，连抽屉一起关了 | 抽屉的 Esc 处理和面板的都挂在 `document` 上；`stopPropagation()` 挡不住同一个节点上的其它监听，要用 `stopImmediatePropagation()`（面板那个先注册，先跑） |
 | 点「尺寸」把格子的点击行为改了 | `bindActionTabs()` 原来扫全页的 `.segmented__btn`；棋盘上方新加的那组也是这个类，被一起接上了。**分组控件的选择器要带容器**（现在扫 `#action-tabs`） |
 
