@@ -424,7 +424,12 @@ body.is-fullscreen {
 .cell__overlay[data-ratio='1/2'][data-dir='left'] { width: 50%; justify-content: flex-start; transform: translateX(-100%); }
 .cell__overlay[data-ratio='1/2'][data-dir='right'] { width: 50%; left: auto; right: 0; justify-content: flex-start; transform: translateX(100%); }
 .cell__overlay[data-ratio='1/2'][data-dir='top'] { height: 50%; bottom: auto; justify-content: flex-start; transform: translateY(-100%); }
-.cell__overlay[data-ratio='1/2'][data-dir='bottom'] { height: 50%; justify-content: flex-start; transform: translateY(100%); }
+/*
+ * 半幅面板要贴在「它从哪边进来」的那一边（right 那条靠 left: auto 转过去）。
+ * bottom 少了 top: auto 的话，面板还挂在顶边，只往下挪了自身一半的高度 ——
+ * 收起来时正好停在格子下半幅，看起来就是「面板一直挂着」。
+ */
+.cell__overlay[data-ratio='1/2'][data-dir='bottom'] { height: 50%; top: auto; bottom: 0; justify-content: flex-start; transform: translateY(100%); }
 
 /*
  * 「悬浮看详情」只在真有 hover 的设备（鼠标、触控板）上生效。
