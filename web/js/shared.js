@@ -51,9 +51,12 @@ export function defaultOverlay() {
   };
 }
 
-/** 全屏展开的默认观感：铺满、深色留白。 */
+/** 全屏展开的预设档位：`上下% / 左右%`；`'0/0'` = 铺满。顺序就是界面上缩略图的顺序。 */
+export const FS_MARGINS = ['0/0', '5/5', '5/10', '10/10', '10/15', '15/15', '20/20'];
+
+/** 全屏展开的默认观感：铺满、圆角 14、深色留白。 */
 export function defaultFullscreen() {
-  return { top: 0, right: 0, bottom: 0, left: 0, color: '#08070d' };
+  return { margin: '0/0', radius: 14, color: '#08070d' };
 }
 
 export function defaultCell(overrides = {}) {
@@ -212,9 +215,10 @@ export function createCell(cell) {
    */
   if (clickEmbed) {
     node.dataset.fullscreen = clickEmbed;
-    // 全屏展开时的四边留白和留白色（主页 openFullscreen 读它）
-    const fs = cell.fullscreen || defaultFullscreen();
-    node.dataset.fsMargin = [fs.top, fs.right, fs.bottom, fs.left].map((n) => Number(n) || 0).join(',');
+    // 全屏展开的档位、圆角、留白色（主页 openFullscreen 读它们）
+    const fs = { ...defaultFullscreen(), ...(cell.fullscreen || {}) };
+    node.dataset.fsMargin = FS_MARGINS.includes(fs.margin) ? fs.margin : '0/0';
+    node.dataset.fsRadius = String(Number(fs.radius) || 0);
     node.dataset.fsColor = fs.color || defaultFullscreen().color;
     const expand = document.createElement('span');
     expand.className = 'cell__expand';

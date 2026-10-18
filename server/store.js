@@ -71,8 +71,8 @@ const MAX_COLS = 12;
 const MIN_BOARD_COLS = 3;
 const DEFAULT_BOARD_COLS = 12;
 const MAX_CELL_UNITS = 12;
-/** 全屏展开时四边留白的上限（px）。 */
-const MAX_FS_MARGIN = 240;
+/** 全屏展开时的留白档位：上下% / 左右%，'0/0' = 铺满。 */
+const FS_MARGINS = ['0/0', '5/5', '5/10', '10/10', '10/15', '15/15', '20/20'];
 
 /**
  * 窄屏重排（只有棋盘布局用得上）：视口低于阈值时，把格子按顺序紧密重排成这么多列。
@@ -158,14 +158,15 @@ function newId() {
 
 /* ------------------------------------------------------------- normalizing */
 
-/** 全屏展开时的四边留白和留白色（0 = 铺满，和以前一样）。 */
+/**
+ * 全屏展开时的样子：留白档位（固定的几档，上下/左右两个百分比）、页面圆角、留白色。
+ * 只收预置档位而不是任意数字 —— 界面上就是几个缩略图，省得每个人自己纠结填多少。
+ */
 function normalizeFullscreen(raw) {
   const src = raw && typeof raw === 'object' ? raw : {};
   return {
-    top: safeNumber(src.top, 0, MAX_FS_MARGIN, 0),
-    right: safeNumber(src.right, 0, MAX_FS_MARGIN, 0),
-    bottom: safeNumber(src.bottom, 0, MAX_FS_MARGIN, 0),
-    left: safeNumber(src.left, 0, MAX_FS_MARGIN, 0),
+    margin: oneOf(src.margin, FS_MARGINS, '0/0'),
+    radius: safeNumber(src.radius, 0, 64, 14),
     color: safeColor(src.color, '#08070d'),
   };
 }

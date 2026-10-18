@@ -696,23 +696,53 @@
   gap: 10px;
 }
 
-/* 上右下左四个小数字格 */
-.grid-4 {
+/* 全屏留白的档位：一个「屏幕」缩略图，深色边就是留白 */
+.margin-picker {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
   gap: 8px;
 }
 
-.mini-field {
-  display: grid;
-  gap: 4px;
-  font-size: 11px;
+.margin-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ink-700);
   color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.16s, background 0.16s, color 0.16s;
 }
 
-.mini-field .input {
-  padding: 6px 7px;
-  font-size: 12.5px;
+.margin-option:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+
+.margin-option[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--ink-700));
+  color: var(--text);
+}
+
+.margin-option__screen {
+  position: relative;
+  width: 52px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--line) 60%, var(--text-dim));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ink-900) 80%, transparent);
+}
+
+/* 里面的那块 = 页面；留白按真实比例（52×34 的百分之几） */
+.margin-option__page {
+  position: absolute;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 45%, var(--text-dim));
 }
 
 .color-row {

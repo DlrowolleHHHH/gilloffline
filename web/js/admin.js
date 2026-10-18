@@ -8,6 +8,8 @@ import {
   createCell,
   currentUserid,
   defaultCell,
+  defaultFullscreen,
+  FS_MARGINS,
   defaultOverlay,
   firstFreeSpot,
   gapPx,
@@ -431,10 +433,8 @@ const els = {
   imageTitle: $('ed-image-title'),
   imageTitleColor: $('ed-image-title-color'),
   imageTitleColorText: $('ed-image-title-color-text'),
-  fsTop: $('ed-fs-top'),
-  fsRight: $('ed-fs-right'),
-  fsBottom: $('ed-fs-bottom'),
-  fsLeft: $('ed-fs-left'),
+  fsMargins: $('ed-fs-margins'),
+  fsRadius: $('ed-fs-radius'),
   fsColor: $('ed-fs-color'),
   fsColorText: $('ed-fs-color-text'),
   color: $('ed-color'),
@@ -800,6 +800,52 @@ document.addEventListener('keydown', (event) => {
 window.addEventListener('resize', closeColorPop);
 $('drawer').addEventListener('scroll', closeColorPop, { passive: true });
 
+/** 全屏留白的当前档位（'5/10' 这种），由下面的按钮组切换。 */
+let fsMarginMode = '0/0';
+
+function setMarginMode(key) {
+  fsMarginMode = FS_MARGINS.includes(key) ? key : '0/0';
+  for (const button of els.fsMargins.querySelectorAll('.margin-option')) {
+    button.setAttribute('aria-pressed', String(button.dataset.margin === fsMarginMode));
+  }
+}
+
+/**
+ * 留白档位按钮：每个是一张「屏幕」缩略图，里面的深色边就是留白 —— 和选尺寸那排
+ * 缩略图一个套路，用户不用自己算数字。
+ */
+function buildMarginOptions() {
+  els.fsMargins.replaceChildren();
+  for (const key of FS_MARGINS) {
+    const [v, h] = key.split('/').map(Number);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'margin-option';
+    button.dataset.margin = key;
+    button.setAttribute('aria-pressed', 'false');
+    button.title = v || h ? `上下 ${v}% · 左右 ${h}%` : '铺满整屏';
+
+    const screen = document.createElement('span');
+    screen.className = 'margin-option__screen';
+    const page = document.createElement('span');
+    page.className = 'margin-option__page';
+    // 52×34 的缩略图，按真实比例留白
+    page.style.inset = `${((v / 100) * 34).toFixed(1)}px ${((h / 100) * 52).toFixed(1)}px`;
+    screen.append(page);
+
+    const label = document.createElement('span');
+    label.className = 'margin-option__label';
+    label.textContent = v || h ? `${v}% / ${h}%` : '铺满';
+    button.append(screen, label);
+
+    button.addEventListener('click', () => {
+      setMarginMode(key);
+      onEdited();
+    });
+    els.fsMargins.append(button);
+  }
+}
+
 function buildSizeOptions() {
   els.sizes.replaceChildren();
   for (const key of SIZE_ORDER) {
@@ -883,12 +929,10 @@ function fillForm(cell) {
   els.imageTitle.value = cell.imageTitle;
   setColorPicker(els.imageTitleColor, els.imageTitleColorText, cell.imageTitleColor);
   setColorPicker(els.color, els.colorText, cell.color);
-  const fs = cell.fullscreen || {};
-  els.fsTop.value = fs.top ?? 0;
-  els.fsRight.value = fs.right ?? 0;
-  els.fsBottom.value = fs.bottom ?? 0;
-  els.fsLeft.value = fs.left ?? 0;
-  setColorPicker(els.fsColor, els.fsColorText, fs.color || '#08070d');
+  const fs = { ...defaultFullscreen(), ...(cell.fullscreen || {}) };
+  setMarginMode(fs.margin);
+  els.fsRadius.value = fs.radius;
+  setColorPicker(els.fsColor, els.fsColorText, fs.color);
   els.ovEnabled.checked = cell.overlay.enabled;
   els.ovTitle.value = cell.overlay.title;
   els.ovBody.value = cell.overlay.body;
@@ -976,12 +1020,9 @@ function applyForm() {
   cell.imageTitle = els.imageTitle.value;
   cell.imageTitleColor = readColorPicker(els.imageTitleColor, els.imageTitleColorText, '#ffffff');
   cell.color = readOptionalColor(els.color, els.colorText, '#7e46b9');
-  const margin = (input) => Math.min(240, Math.max(0, Math.round(Number(input.value) || 0)));
   cell.fullscreen = {
-    top: margin(els.fsTop),
-    right: margin(els.fsRight),
-    bottom: margin(els.fsBottom),
-    left: margin(els.fsLeft),
+    margin: fsMarginMode,
+    radius: Math.min(64, Math.max(0, Math.round(Number(els.fsRadius.value) || 0))),
     color: readColorPicker(els.fsColor, els.fsColorText, '#08070d'),
   };
   cell.overlay = {
@@ -1157,12 +1198,13 @@ function bindUpload(buttonId, inputId, kind, field, okMessage) {
 function bindEditor() {
   buildSelects();
   buildSizeOptions();
+  buildMarginOptions();
 
   const live = [
     els.type, els.borderWidth, els.radius, els.image, els.html, els.embed, els.fit,
     els.imageTitle, els.color, els.color, els.ovEnabled, els.ovTitle, els.ovBody,
     els.ovDir, els.ovRatio, els.link,
-    els.fsTop, els.fsRight, els.fsBottom, els.fsLeft,
+    els.fsRadius,
   ];
   for (const element of new Set(live)) element.addEventListener('input', onEdited);
 

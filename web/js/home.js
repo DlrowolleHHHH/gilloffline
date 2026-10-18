@@ -186,25 +186,29 @@ function closeFullscreen() {
 }
 
 /**
- * 全屏展开时这颗格子自己的设置：四边留白 + 留白色，由 createCell 挂在 dataset 上。
- * 留白 0（默认）就是铺满整屏，和以前一样。
+ * 全屏展开时这颗格子自己的设置：留白档位（上下% / 左右%）、页面圆角、留白色，
+ * 都由 createCell 挂在 dataset 上。留白 '0/0'（默认）就是铺满整屏。
  */
 function fullscreenOptions(cell) {
-  const [top, right, bottom, left] = (cell.dataset.fsMargin || '0,0,0,0')
-    .split(',')
-    .map((n) => Number(n) || 0);
-  return { margin: [top, right, bottom, left], color: cell.dataset.fsColor || '' };
+  const [v, h] = (cell.dataset.fsMargin || '0/0').split('/').map((n) => Number(n) || 0);
+  return {
+    margin: [v, h, v, h],
+    radius: Number(cell.dataset.fsRadius ?? 14),
+    color: cell.dataset.fsColor || '',
+  };
 }
 
 function openFullscreen(url, title, rect, options = {}) {
   closeFullscreen();
   const box = document.createElement('div');
   box.className = 'fullscreen';
+  // 留白是百分比：上下按视口高度、左右按视口宽度算
   const [top, right, bottom, left] = options.margin || [0, 0, 0, 0];
-  box.style.setProperty('--fs-top', `${top}px`);
-  box.style.setProperty('--fs-right', `${right}px`);
-  box.style.setProperty('--fs-bottom', `${bottom}px`);
-  box.style.setProperty('--fs-left', `${left}px`);
+  box.style.setProperty('--fs-top', `${top}%`);
+  box.style.setProperty('--fs-right', `${right}%`);
+  box.style.setProperty('--fs-bottom', `${bottom}%`);
+  box.style.setProperty('--fs-left', `${left}%`);
+  box.style.setProperty('--fs-radius', `${Number.isFinite(options.radius) ? options.radius : 14}px`);
   if (options.color) box.style.setProperty('--fs-color', options.color);
   // 留白交给这层普通的 div（inset 就能撑开）；iframe 在里面铺满 100%。
   // 不直接把 inset/calc 写在 iframe 上：它是替换元素，各浏览器的尺寸规则不一样，容易踩坑。

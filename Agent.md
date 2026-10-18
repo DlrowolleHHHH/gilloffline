@@ -46,9 +46,11 @@
   （`SIZE_UNITS` 在 `server/store.js`，`SIZES` 在两边各有一份，必须同步）。字符串解析它是坑，别做。
   两者**互不派生**：棋盘用 `pos`，flow 用 `size`；`cellUnits()` 已经处理好（有 `pos` 就用 `pos`）。
 - `pos` 在 flow 文档里也会被保留（`normalizeCell` 两种布局都存）：来回切换布局不能丢摆位。
-- **全屏展开的设置挂在 `cell.fullscreen` 上**：`{ top, right, bottom, left, color }`，
-  只有 `embed` 生效时才有意义。四边留白 0（默认）= 铺满整屏 = 老行为。渲染时 `createCell` 把四个值
-  和颜色写到格子的 `data-fs-*` 上，主页 `openFullscreen()` 照着写 `--fs-*` CSS 变量；
+- **全屏展开的设置挂在 `cell.fullscreen` 上**：`{ margin, radius, color }`。`margin` 是
+  **预置档位**（`'0/0'` … `'20/20'`，含义是「上下% / 左右%」，`FS_MARGINS` 在
+  `web/js/shared.js` 和 `server/store.js` 各一份、必须同步），`'0/0'`（默认）= 铺满整屏 = 老行为；
+  只有 `embed` 生效时才有意义。渲染时 `createCell` 把档位/圆角/颜色写到格子的 `data-fs-*` 上，
+  主页 `openFullscreen()` 照着写 `--fs-*` CSS 变量（留白是百分比，圆角是 px）；
   角标、键盘展开、点格子这三条路都走 `fullscreenOptions(cell)`，别各写一份。
 - **颜色字段有两种「空」**：`borderColor` / `color`（纯色封面那条底色）**允许空串**，
   表示「透明 / 无」（抽屉里点色板弹出取色面板，面板右下角那个红斜杠方块）—— 边框是「不画这条边」

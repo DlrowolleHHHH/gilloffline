@@ -455,27 +455,28 @@
               <input type="file" id="upload-file-embed" accept=".html,.htm,text/html" hidden />
             </div>
             <div class="field">
-              <label>全屏时的边距 (px)</label>
-              <div class="grid-4">
-                <label class="mini-field">上<input class="input" id="ed-fs-top" type="number" min="0" max="240" step="4" /></label>
-                <label class="mini-field">右<input class="input" id="ed-fs-right" type="number" min="0" max="240" step="4" /></label>
-                <label class="mini-field">下<input class="input" id="ed-fs-bottom" type="number" min="0" max="240" step="4" /></label>
-                <label class="mini-field">左<input class="input" id="ed-fs-left" type="number" min="0" max="240" step="4" /></label>
-              </div>
+              <label>全屏时的边距</label>
+              <div class="margin-picker" id="ed-fs-margins"></div>
             </div>
-            <div class="field">
-              <label for="ed-fs-color">边距颜色</label>
-              <div class="color-row">
-                <button class="swatch" id="ed-fs-color" type="button" aria-label="边距颜色：打开取色面板"></button>
-                <input class="input" id="ed-fs-color-text" type="text" spellcheck="false" />
+            <div class="grid-2">
+              <div class="field">
+                <label for="ed-fs-radius">页面圆角 (px)</label>
+                <input class="input" id="ed-fs-radius" type="number" min="0" max="64" step="2" />
+              </div>
+              <div class="field">
+                <label for="ed-fs-color">边距颜色</label>
+                <div class="color-row">
+                  <button class="swatch" id="ed-fs-color" type="button" aria-label="边距颜色：打开取色面板"></button>
+                  <input class="input" id="ed-fs-color-text" type="text" spellcheck="false" />
+                </div>
               </div>
             </div>
             <p class="hint">
               和封面是两回事：封面照旧是图片 / 纯色 / 网页，这里再嵌一个可以点开的页面（比如一个小工具）。
               填了之后，鼠标移到格子上时右下角会浮出放大角标，点格子或角标就<strong>全屏展开</strong>这个页面 ——
               页面平时不加载，关掉之后它里面的脚本也随之停下。
-              全屏时可以留一圈边距（四边都填 0 就是铺满整屏），这圈边距的颜色也在上面配；
-              有了边距以后，点这圈留白也能关掉。
+              全屏时可以按几档**预置**留一圈边距（缩略图里的深色就是留白，数字是上下% / 左右%），
+              页面圆角和这圈边距的颜色也在上面配；有了边距以后，点这圈留白也能关掉。
             </p>
             <p class="hint">
               上传的页面存在数据目录里，重新部署不会丢。页面在沙箱里运行：可以用 JavaScript，
