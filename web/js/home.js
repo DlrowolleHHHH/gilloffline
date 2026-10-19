@@ -113,7 +113,7 @@ const layout = () => {
 async function boot() {
   applyOwnAssets();
   renderAdminEntry();
-  setupShare();
+  refreshSharePermission();
   window.addEventListener('resize', layout);
   try {
     const doc = await fetchSite();
@@ -300,19 +300,30 @@ let shareCell = null;
 /**
  * 分享按钮只给「有分享权限的子管理员」看，而且只在他自己的站上
  * （subject === ?userid=）。站主的页面就是首页，不显示这个按钮 —— 他不需要分享。
+ *
+ * 权限是站主在管理页里随时可以改的，所以这里不只在页面加载时问一次：
+ * 从 bfcache 恢复（pageshow）、或者切回这个标签页（visibilitychange）时都会重新问，
+ * 用户不用退出重登、甚至不用刷新，切回来按钮就跟上了。
  */
-async function setupShare() {
+async function refreshSharePermission() {
   let session;
   try {
-    session = await (await fetch('/api/session')).json();
+    // no-store 是双保险：/api/session 本来就回的 no-store，别让任何缓存把它留住
+    session = await (await fetch('/api/session', { cache: 'no-store' })).json();
   } catch {
-    return; // 连不上就当作没有权限，不显示
+    return; // 连不上就保持原样
   }
   const owner = currentUserid();
   const own = owner !== '' && session.subject === owner;
-  if (!session.canShare || !own) return;
-  shareEntry.hidden = false;
+  const allowed = Boolean(session.canShare) && own;
+  shareEntry.hidden = !allowed;
+  if (!allowed && sharing) setSharing(false);
 }
+
+window.addEventListener('pageshow', () => refreshSharePermission());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') refreshSharePermission();
+});
 
 function setSharing(next) {
   sharing = next;
