@@ -35,6 +35,8 @@ const state = {
   doc: { site: {}, cells: [] },
   editingId: null,
   dirty: false,
+  /** 登录者：'admin' 或子管理员的 userid；决定仓库里哪些盒子能改/删。 */
+  subject: null,
 };
 
 /* --------------------------------------------------------------------- api */
@@ -1540,6 +1542,18 @@ function userRow(user) {
   meta.className = 'file-row__meta';
   meta.textContent = `注册于 ${stampOf(user.createdAt)} · ${user.userid.slice(0, 8)}…`;
 
+  const share = document.createElement('label');
+  share.className = 'user-share';
+  share.title = '允许这个用户把盒子分享到盒子仓库';
+  const shareBox = document.createElement('input');
+  shareBox.type = 'checkbox';
+  shareBox.checked = user.canShare === true;
+  shareBox.dataset.share = user.userid;
+  shareBox.dataset.username = user.username;
+  const shareText = document.createElement('span');
+  shareText.textContent = '可分享';
+  share.append(shareBox, shareText);
+
   const actions = document.createElement('span');
   actions.className = 'file-row__acts';
   const visit = actionButton('visit', '↗', '看他/她的主页', user.userid);
@@ -1548,7 +1562,7 @@ function userRow(user) {
   for (const button of [visit, manage, remove]) button.dataset.username = user.username;
   actions.append(visit, manage, remove);
 
-  row.append(thumb, name, meta, actions);
+  row.append(thumb, name, meta, share, actions);
   return row;
 }
 
@@ -1745,6 +1759,181 @@ function bindPeople() {
     if (button.dataset.act === 'manage') location.href = `/admin?userid=${id}`;
     if (button.dataset.act === 'del') removeUser(id, button.dataset.username || id);
   });
+
+  $('user-list').addEventListener('change', async (event) => {
+    const input = event.target.closest('input[data-share]');
+    if (!input) return;
+    try {
+      await api('/api/users', {
+        method: 'PATCH',
+        body: { userid: input.dataset.share, canShare: input.checked },
+      });
+      toast(`${input.dataset.username} ${input.checked ? '已开通' : '已关闭'}分享权限`, 'ok');
+    } catch (err) {
+      input.checked = !input.checked;
+      toast(err.message, 'error');
+    }
+  });
+
+  $('repo-panel').addEventListener('toggle', () => {
+    if ($('repo-panel').open) loadRepository();
+  });
+  $('repo-list').addEventListener('click', onRepoAction);
+}
+
+/* ------------------------------------------------------------ 盒子仓库 */
+
+/** 仓库列表（本地缓存一份，编辑/删除时按 id 找回对应的盒子）。 */
+let repoBoxes = [];
+
+function repoEmpty(text) {
+  const empty = document.createElement('li');
+  empty.className = 'file-empty';
+  empty.textContent = text;
+  return empty;
+}
+
+async function loadRepository() {
+  try {
+    const data = await api('/api/repository');
+    repoBoxes = data.boxes || [];
+    renderRepository();
+  } catch (err) {
+    $('repo-list').replaceChildren(repoEmpty(`加载失败：${err.message}`));
+  }
+}
+
+/** 一颗盒子的缩略图：纯色给色块，图片给图，网页封面给字。 */
+function repoThumb(cell) {
+  const thumb = document.createElement('span');
+  thumb.className = 'file-row__thumb repo-thumb';
+  if (cell.type === 'solid') {
+    thumb.style.background = cell.color || 'var(--ink-500)';
+  } else if (cell.type === 'image' && cell.image) {
+    const img = document.createElement('img');
+    img.src = cell.image;
+    img.alt = '';
+    img.loading = 'lazy';
+    thumb.append(img);
+  } else {
+    thumb.classList.add('file-row__thumb--text');
+    thumb.textContent = cell.type === 'html' ? 'HTML' : '图';
+  }
+  return thumb;
+}
+
+function repoRow(box) {
+  const row = document.createElement('li');
+  row.className = 'file-row';
+  row.dataset.id = box.id;
+
+  const cell = box.cell || {};
+  const name = document.createElement('span');
+  name.className = 'file-row__name';
+  name.textContent = cell.imageTitle || `${cell.size || '1x1'} · ${cell.type || 'image'}`;
+
+  const meta = document.createElement('span');
+  meta.className = 'file-row__meta';
+  meta.textContent = [box.info, `by ${box.sharerName}`, stampOf(box.createdAt)].filter(Boolean).join(' · ');
+
+  const actions = document.createElement('span');
+  actions.className = 'file-row__acts';
+  if (state.subject === 'admin' || box.sharer === state.subject) {
+    actions.append(
+      actionButton('edit', '✎', '改标签 / 描述', box.id),
+      actionButton('rm', '✕', '从仓库删除', box.id)
+    );
+  }
+
+  row.append(repoThumb(cell), name, meta, actions);
+  return row;
+}
+
+function renderRepository() {
+  const list = $('repo-list');
+  list.replaceChildren();
+  if (!repoBoxes.length) {
+    list.append(repoEmpty('仓库还是空的 —— 有分享权限的用户可以在自己的主页上分享盒子。'));
+    return;
+  }
+  const groups = new Map();
+  for (const box of repoBoxes) {
+    const label = box.label || '未命名';
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(box);
+  }
+  for (const label of [...groups.keys()].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))) {
+    const head = document.createElement('li');
+    head.className = 'repo-group';
+    head.textContent = `${label} · ${groups.get(label).length}`;
+    list.append(head);
+    for (const box of groups.get(label)) list.append(repoRow(box));
+  }
+}
+
+/** 行内改标签 / 描述：把这一行换成两个输入框 + 保存/取消。 */
+function startRepoEdit(row, box) {
+  const label = document.createElement('input');
+  label.className = 'input input--slim';
+  label.value = box.label || '';
+  label.maxLength = 40;
+  label.placeholder = '标签（必填）';
+  label.dataset.repoLabel = '1';
+
+  const info = document.createElement('input');
+  info.className = 'input input--slim input--grow';
+  info.value = box.info || '';
+  info.maxLength = 400;
+  info.placeholder = '描述（可留空）';
+  info.dataset.repoInfo = '1';
+
+  const actions = document.createElement('span');
+  actions.className = 'file-row__acts';
+  actions.append(
+    actionButton('save', '✓', '保存', box.id),
+    actionButton('cancel', '↩', '取消', box.id)
+  );
+
+  row.replaceChildren(label, info, actions);
+  label.focus();
+  label.select();
+}
+
+async function onRepoAction(event) {
+  const button = event.target.closest('button[data-act]');
+  if (!button) return;
+  const act = button.dataset.act;
+  const id = button.dataset.name;
+  const row = button.closest('.file-row');
+  const box = repoBoxes.find((item) => item.id === id);
+
+  if (act === 'edit' && box && row) return startRepoEdit(row, box);
+  if (act === 'cancel') return loadRepository();
+  if (act === 'save' && row) {
+    const label = row.querySelector('[data-repo-label]');
+    const info = row.querySelector('[data-repo-info]');
+    try {
+      await api(`/api/repository/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: { label: label.value, info: info.value },
+      });
+      toast('已更新盒子的标签/描述', 'ok');
+      await loadRepository();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+    return;
+  }
+  if (act === 'rm') {
+    if (!confirm('从盒子仓库删掉这个盒子？')) return;
+    try {
+      await api(`/api/repository/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      toast('已从仓库删除', 'ok');
+      await loadRepository();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }
 }
 
 /* -------------------------------------------------------------- save/export */
@@ -1918,6 +2107,7 @@ async function boot() {
       showLogin();
       return;
     }
+    state.subject = session.subject;
     // the owner can open anyone's page; a sub-admin only their own
     const mine = session.subject === 'admin' || (userid !== '' && session.subject === userid);
     if (mine) await start();

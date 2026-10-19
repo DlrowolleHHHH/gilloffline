@@ -30,7 +30,8 @@ const SCHEMA = `
     pw_salt      TEXT NOT NULL,
     pw_hash      TEXT NOT NULL,
     deleted_at   INTEGER,
-    archive      TEXT
+    archive      TEXT,
+    can_share    INTEGER NOT NULL DEFAULT 0
   );
   -- a name is only taken while someone is actually using it: deleted users keep
   -- their name in a tombstone, which must not block a new signup
@@ -55,11 +56,21 @@ function open() {
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA synchronous = NORMAL');
   db.exec(SCHEMA);
+  migrate(db);
   importLegacy(db);
   return db;
 }
 
 const get = () => open();
+
+/** Schema additions for databases created by an older build. */
+function migrate(database) {
+  const columns = database.prepare('PRAGMA table_info(users)').all();
+  if (!columns.some((column) => column.name === 'can_share')) {
+    database.exec('ALTER TABLE users ADD COLUMN can_share INTEGER NOT NULL DEFAULT 0');
+    console.log('[db] added users.can_share');
+  }
+}
 
 /* --------------------------------------------------------------- migration */
 

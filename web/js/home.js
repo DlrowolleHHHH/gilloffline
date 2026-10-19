@@ -9,6 +9,7 @@ import {
   numberSetting,
   packBoard,
   repackColumns,
+  toast,
   withUserid,
 } from './shared.js';
 
@@ -112,6 +113,7 @@ const layout = () => {
 async function boot() {
   applyOwnAssets();
   renderAdminEntry();
+  setupShare();
   window.addEventListener('resize', layout);
   try {
     const doc = await fetchSite();
@@ -252,11 +254,21 @@ function openFullscreen(url, title, rect, options = {}) {
 }
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeFullscreen();
+  if (event.key !== 'Escape') return;
+  if (!shareDialog.hidden) {
+    closeShareDialog();
+    return;
+  }
+  if (sharing) {
+    setSharing(false);
+    return;
+  }
+  closeFullscreen();
 });
 
 // 角标是 role="button"，键盘上也要能展开
 grid.addEventListener('keydown', (event) => {
+  if (sharing) return; // 选盒子模式下键盘也不该把页面全屏掉
   if (event.key !== 'Enter' && event.key !== ' ') return;
   const expand = event.target.closest('.cell__expand');
   const cell = expand && expand.closest('.cell');
@@ -264,6 +276,133 @@ grid.addEventListener('keydown', (event) => {
   event.preventDefault();
   openFullscreen(cell.dataset.fullscreen, cell.querySelector('.cell__caption')?.textContent || '',
     cell.getBoundingClientRect(), fullscreenOptions(cell));
+});
+
+/* ------------------------------------------------------------ 盒子共享 */
+
+const shareEntry = document.getElementById('share-entry');
+const shareBanner = document.getElementById('share-banner');
+const shareExit = document.getElementById('share-exit');
+const shareDialog = document.getElementById('share-dialog');
+const shareTarget = document.getElementById('share-target');
+const shareLabel = document.getElementById('share-label');
+const shareInfo = document.getElementById('share-info');
+const shareLabels = document.getElementById('share-labels');
+const shareError = document.getElementById('share-error');
+const shareCancel = document.getElementById('share-cancel');
+const shareSubmit = document.getElementById('share-submit');
+
+/** 正在「选盒子」模式：这时点格子是选它，不是跳转/展开。 */
+let sharing = false;
+/** 分享窗口里正在处理的盒子（站点数据里的那一颗）。 */
+let shareCell = null;
+
+/**
+ * 分享按钮只在「有分享权限 + 正在看自己的站」时露出来：
+ * 站主的站判 subject === 'admin'，子管理员的站判 subject === ?userid=。
+ * 权限由站主在管理页里分配。
+ */
+async function setupShare() {
+  let session;
+  try {
+    session = await (await fetch('/api/session')).json();
+  } catch {
+    return; // 连不上就当作没有权限，不显示
+  }
+  const owner = currentUserid();
+  const own = owner ? session.subject === owner : session.subject === 'admin';
+  if (!session.canShare || !own) return;
+  shareEntry.hidden = false;
+}
+
+function setSharing(next) {
+  sharing = next;
+  document.body.classList.toggle('is-sharing', next);
+  shareBanner.hidden = !next;
+  shareEntry.setAttribute('aria-pressed', String(next));
+  if (next) loadShareLabels();
+  else closeShareDialog();
+}
+
+/** 仓库里已有的标签当候选（同一个标签下可以有很多盒子）。 */
+async function loadShareLabels() {
+  try {
+    const data = await (await fetch('/api/repository')).json();
+    const labels = [...new Set((data.boxes || []).map((box) => box.label).filter(Boolean))];
+    shareLabels.replaceChildren(
+      ...labels.map((label) => {
+        const option = document.createElement('option');
+        option.value = label;
+        return option;
+      })
+    );
+  } catch {
+    /* 拿不到候选也没关系，标签本来就随手填 */
+  }
+}
+
+function showShareError(message) {
+  shareError.textContent = message;
+  shareError.hidden = !message;
+}
+
+function openShareDialog(cell) {
+  const data = siteCells.find((item) => item.id === cell.dataset.id);
+  if (!data) return;
+  shareCell = data;
+  shareLabel.value = '';
+  shareInfo.value = '';
+  showShareError('');
+  shareTarget.textContent = data.imageTitle ? `「${data.imageTitle}」` : '这个盒子';
+  shareDialog.hidden = false;
+  requestAnimationFrame(() => shareLabel.focus());
+}
+
+function closeShareDialog() {
+  shareDialog.hidden = true;
+  shareCell = null;
+}
+
+async function submitShare() {
+  if (!shareCell) return;
+  const label = shareLabel.value.trim();
+  if (!label) {
+    showShareError('标签不能为空。');
+    shareLabel.focus();
+    return;
+  }
+  shareSubmit.disabled = true;
+  try {
+    const res = await fetch('/api/repository', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label, info: shareInfo.value.trim(), cell: shareCell }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `分享失败（${res.status}）`);
+    closeShareDialog();
+    toast('已分享到盒子仓库', 'ok');
+    loadShareLabels(); // 新标签也进候选
+  } catch (err) {
+    showShareError(err.message);
+  } finally {
+    shareSubmit.disabled = false;
+  }
+}
+
+shareEntry.addEventListener('click', () => setSharing(!sharing));
+shareExit.addEventListener('click', () => setSharing(false));
+shareCancel.addEventListener('click', closeShareDialog);
+shareSubmit.addEventListener('click', submitShare);
+shareDialog.addEventListener('click', (event) => {
+  if (event.target === shareDialog) closeShareDialog();
+});
+shareDialog.addEventListener('keydown', (event) => {
+  // 标签里回车直接提交；描述是多行，回车不算
+  if (event.key === 'Enter' && !event.shiftKey && event.target !== shareInfo) {
+    event.preventDefault();
+    submitShare();
+  }
 });
 
 /*
@@ -283,6 +422,12 @@ const closeOpenCells = () =>
 
 grid.addEventListener('click', (event) => {
   const cell = event.target.closest('.cell');
+  if (sharing) {
+    // 选盒子模式：这一下只用来挑盒子 —— 不跳链接、不展开、不弹详情
+    event.preventDefault();
+    if (cell) openShareDialog(cell);
+    return;
+  }
   if (!cell) {
     closeOpenCells(); // 点到卡片之间的空隙
     return;

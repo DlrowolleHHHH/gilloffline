@@ -15,7 +15,8 @@
 | `web/js/shared.js` | 几何与布局核心：`applyGridLayout`、`packBoard`、`repairBoard`、`firstFreeSpot`、碰撞判断 |
 | `web/js/board.js` | 棋盘的交互与渲染：拖拽手势、网格吸附、ghost 预览、行数增长 |
 | `web/js/admin.js` | 管理页把两者接起来：工具条（列数/间隔/缩放）、抽屉（含**自绘取色面板**：SV 区 + 色相/透明度条 + HEX/RGB/HSV + 吸管）、脏标记 |
-| `web/js/home.js` | 主页：套用 `site` 设置（强调色、间隔、布局）并渲染；子管理员的站（`?userid=…`）还会亮出右上角那个 `#admin-entry`（`position: fixed` + `z-index: 40`，**故意压在**全屏嵌入 80/81 和提示条 60 下面） |
+| `web/js/home.js` | 主页：套用 `site` 设置（强调色、间隔、布局）并渲染；子管理员的站（`?userid=…`）还会亮出右上角那个 `#admin-entry`（`position: fixed` + `z-index: 40`，**故意压在**全屏嵌入 80/81 和提示条 60 下面）。**盒子共享**也在这里：分享按钮 / 选盒子模式 / 分享窗口（`setupShare`、`setSharing`、`openShareDialog`） |
+| `server/repository.js` | 盒子仓库：全局共享的盒子清单（`DATA_DIR/repository.json`），按 label 归类；入仓前过 `store.normalizeCell` 清洗 |
 | `web/css/admin.css` | `.admin-board`（棋盘容器）与 `.admin-board::before`（格线） |
 | `data/site.json` | 提交进仓库的种子数据，运行时只读（首次部署时复制到数据目录） |
 
@@ -52,6 +53,10 @@
   只有 `embed` 生效时才有意义。渲染时 `createCell` 把档位/圆角/颜色写到格子的 `data-fs-*` 上，
   主页 `openFullscreen()` 照着写 `--fs-*` CSS 变量（留白是百分比，圆角是 px）；
   角标、键盘展开、点格子这三条路都走 `fullscreenOptions(cell)`，别各写一份。
+- **盒子仓库不属于 `site.json`**：它是 `DATA_DIR/repository.json` 里的一份全局清单，
+  每个盒子存的是「去掉 `id`/`pos` 的格子 + label + info + 分享者」。写权限靠
+  `users.can_share`（SQLite 里的列，站主在用户面板勾选），分享者/站主才能改删自己的盒子。
+  写库走 `store.writeJsonAtomic`（临时文件 + rename），和 site.json 一样不会写出半个文件。
 - **颜色字段有两种「空」**：`borderColor` / `color`（纯色封面那条底色）**允许空串**，
   表示「透明 / 无」（抽屉里点色板弹出取色面板，面板右下角那个红斜杠方块）—— 边框是「不画这条边」
   （粗细照旧占位），底色是「不铺」。走的是

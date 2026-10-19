@@ -13,8 +13,12 @@
  *   GET    /api/files?kind=x      list a file collection (that site's owner)
  *   POST   /api/files?kind=x&name=y   raw binary upload
  *   DELETE /api/files?kind=x&name=y   delete a file
- *   GET|POST|DELETE /api/users    sub-admins (site owner only)
+ *   GET|POST|DELETE /api/users    sub-admins (site owner only); PATCH sets canShare
  *   GET|POST|DELETE /api/invites  invite codes (site owner only)
+ *   GET    /api/repository        the shared box repository (public)
+ *   POST   /api/repository        share one of your cells (needs share permission)
+ *   PATCH  /api/repository/:id    relabel / re-describe a box (its sharer or the owner)
+ *   DELETE /api/repository/:id    remove a box (its sharer or the owner)
  *
  * `kind` is one of `assets` (the site's own images), `uploads` (images used in
  * cells) or `pages` (HTML pages embedded in cells). Without `userid` they are
@@ -28,6 +32,7 @@ const path = require('path');
 const store = require('./store');
 const auth = require('./auth');
 const users = require('./users');
+const repository = require('./repository');
 
 const MAX_BODY_BYTES = 24 * 1024 * 1024;
 
@@ -254,6 +259,8 @@ async function handle(req, res, url) {
       authenticated: subject === 'admin' || Boolean(user),
       subject: subject || null,
       username: subject === 'admin' ? 'admin' : user ? user.username : null,
+      // 共享盒子的权限：站主天然有，子管理员要站主开
+      canShare: subject === 'admin' || Boolean(user && user.canShare),
     });
   }
 
@@ -346,6 +353,10 @@ async function handle(req, res, url) {
     if (method === 'DELETE') {
       return sendJson(res, 200, users.removeUser(url.searchParams.get('userid')));
     }
+    if (method === 'PATCH') {
+      const body = await readJson(req);
+      return sendJson(res, 200, users.setShare(body.userid, body.canShare === true));
+    }
   }
 
   if (pathname === '/api/invites') {
@@ -367,6 +378,41 @@ async function handle(req, res, url) {
     const saved = userid ? users.writeSite(userid, body) : await store.write(body);
     console.log('[api] site saved (%d cells)%s', saved.cells.length, userid ? ` for ${userid.slice(0, 8)}…` : '');
     return sendJson(res, 200, saved);
+  }
+
+  if (pathname === '/api/repository') {
+    if (method === 'GET') return sendJson(res, 200, { boxes: repository.list() });
+    if (method === 'POST') {
+      const subject = auth.sessionSubject(req);
+      if (subject === null) return sendJson(res, 401, { error: '登录已失效，请重新登录。' });
+      const user = subject === 'admin' ? null : users.findUser(subject);
+      if (subject !== 'admin' && !(user && user.canShare)) {
+        return sendJson(res, 403, { error: '你还没有分享权限，请联系站主开通。' });
+      }
+      const body = await readJson(req);
+      const box = repository.add({
+        label: body.label,
+        info: body.info,
+        cell: body.cell,
+        sharer: subject,
+        sharerName: subject === 'admin' ? '站主' : user.username,
+      });
+      console.log('[api] box shared: %s by %s', box.label, subject === 'admin' ? 'admin' : subject.slice(0, 8) + '…');
+      return sendJson(res, 201, box);
+    }
+  }
+
+  const boxMatch = /^\/api\/repository\/([A-Za-z0-9_-]{1,40})$/.exec(pathname);
+  if (boxMatch && (method === 'PATCH' || method === 'DELETE')) {
+    const subject = auth.sessionSubject(req);
+    if (subject === null) return sendJson(res, 401, { error: '登录已失效，请重新登录。' });
+    if (method === 'DELETE') {
+      const box = repository.remove(boxMatch[1], subject);
+      console.log('[api] box removed: %s', box.id);
+      return sendJson(res, 200, { ok: true });
+    }
+    const body = await readJson(req);
+    return sendJson(res, 200, repository.update(boxMatch[1], { label: body.label, info: body.info }, subject));
   }
 
   if (pathname === '/api/files') {

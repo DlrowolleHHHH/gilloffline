@@ -85,6 +85,7 @@ const toAccount = (row) =>
     password: { salt: row.pw_salt, hash: row.pw_hash },
     deletedAt: row.deleted_at ?? undefined,
     archive: row.archive || '',
+    canShare: row.can_share === 1,
   };
 
 const toInvite = (row) =>
@@ -164,6 +165,7 @@ const publicUser = (user) => ({
   userid: user.userid,
   username: user.username,
   createdAt: user.createdAt,
+  canShare: user.canShare === true,
 });
 
 function listUsers() {
@@ -184,6 +186,19 @@ const findByName = (username) =>
   );
 
 const exists = (userid) => Boolean(findUser(userid));
+
+/** 站主给某个用户开 / 关「共享盒子」的权限。 */
+function setShare(userid, canShare) {
+  const account = findUser(userid);
+  if (!account) throw FAIL('没有这个用户。', 404);
+  db.sql('UPDATE users SET can_share = ? WHERE userid = ?').run(canShare ? 1 : 0, userid);
+  return { ...publicUser(account), canShare: Boolean(canShare) };
+}
+
+const canShare = (userid) => {
+  const account = findUser(userid);
+  return Boolean(account && account.canShare);
+};
 
 function createUser({ username, password }) {
   const name = String(username || '').trim();
@@ -360,6 +375,8 @@ module.exports = {
   exists,
   createUser,
   removeUser,
+  setShare,
+  canShare,
   listDeleted,
   restoreUser,
   passwordMatches,
