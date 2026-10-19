@@ -33,6 +33,10 @@
             <strong>PNG → SVG</strong>
             <span>位图描摹成矢量图</span>
           </button>
+          <button class="tool" type="button" data-tool="mdhtml" aria-selected="false">
+            <strong>MD → HTML</strong>
+            <span>Markdown 写成网页</span>
+          </button>
         </aside>
 
         <section class="editor__panel">
@@ -233,6 +237,79 @@
                     <div class="stage stage--checker"><img id="pv-result" alt="" /></div>
                   </figure>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ======================================================= MD → HTML -->
+          <div class="tool-pane" id="pane-mdhtml" hidden>
+            <div class="tool-head">
+              <h1>MD → HTML</h1>
+              <p class="hint">
+                在线写 Markdown，实时预览，导出成和站点风格一致的独立 HTML。
+                文字可以选「标注 / 手绘风」两套风格，还能直接插入服务器上已有的图片。
+              </p>
+            </div>
+
+            <div class="tool-body tool-body--md">
+              <div class="tool-form">
+                <div class="field">
+                  <label for="md-title">页面标题</label>
+                  <input class="input" id="md-title" type="text" maxlength="120" spellcheck="false" />
+                </div>
+
+                <div class="field">
+                  <label>文字风格</label>
+                  <div class="seg seg--labels" id="md-style">
+                    <button type="button" data-style="annotation" aria-pressed="true">标注</button>
+                    <button type="button" data-style="handdrawn" aria-pressed="false">手绘风</button>
+                  </div>
+                  <p class="hint" id="md-style-hint"></p>
+                </div>
+
+                <div class="field">
+                  <label for="md-source">Markdown</label>
+                  <textarea class="input md-source" id="md-source" rows="18" spellcheck="false"></textarea>
+                  <div class="row">
+                    <button class="btn btn--ghost" id="md-mark" type="button">标注选中文字</button>
+                    <span class="hint">也可以手写 <code>==文字==</code>。</span>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label>插入服务器图片</label>
+                  <div class="row">
+                    <select class="input input--slim" id="md-image-kind">
+                      <option value="uploads">uploads（上传图片）</option>
+                      <option value="assets">assets（站点图片）</option>
+                    </select>
+                    <button class="btn btn--ghost" id="md-image-refresh" type="button">刷新</button>
+                  </div>
+                  <div class="md-images" id="md-images"></div>
+                  <p class="hint" id="md-images-hint"></p>
+                </div>
+
+                <div class="field">
+                  <label for="md-name">文件名</label>
+                  <input class="input" id="md-name" type="text" spellcheck="false" />
+                </div>
+
+                <div class="row row--actions">
+                  <button class="btn btn--primary" id="md-download" type="button">下载 HTML</button>
+                  <button class="btn" id="md-save" type="button">存到服务器</button>
+                </div>
+                <p class="hint" id="md-save-hint"></p>
+                <p class="hint">
+                  存到服务器时写进 pages/，在管理页把 <code>/pages/…</code> 填进「嵌入的 HTML」或「封面的 HTML」即可。
+                  图片用的是服务器地址，下载后在站外打开时图片不会显示。
+                </p>
+              </div>
+
+              <div class="tool-preview">
+                <div class="stage stage--md">
+                  <iframe id="md-preview" title="HTML 预览" sandbox=""></iframe>
+                </div>
+                <p class="hint" id="md-info"></p>
               </div>
             </div>
           </div>

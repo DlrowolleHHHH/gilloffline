@@ -288,6 +288,113 @@
   background: color-mix(in srgb, var(--accent) 12%, var(--ink-900));
 }
 
+/* ------------------------------------------------------------------ MD → HTML */
+
+.tool-body--md {
+  grid-template-columns: minmax(300px, 0.92fr) minmax(0, 1.08fr);
+}
+
+@media (max-width: 1100px) {
+  .tool-body--md {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.md-source {
+  min-height: 320px;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  tab-size: 2;
+}
+
+/* the base .seg pushes right; this one is a plain two-option picker */
+.seg--labels {
+  margin-left: 0;
+}
+
+.seg--labels button {
+  padding: 7px 13px;
+  font-size: 12.5px;
+}
+
+.stage--md {
+  display: block;
+  min-height: 560px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.stage--md iframe {
+  display: block;
+  width: 100%;
+  height: 620px;
+  border: 0;
+  background: var(--ink-800);
+}
+
+@media (max-width: 1000px) {
+  .stage--md iframe {
+    height: 520px;
+  }
+}
+
+.md-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 6px;
+  max-height: 160px;
+  min-height: 48px;
+  padding: 5px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ink-900);
+}
+
+.md-images__empty {
+  grid-column: 1 / -1;
+  padding: 10px 4px;
+}
+
+.md-image {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 3px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.md-image img {
+  display: block;
+  width: 100%;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 5px;
+  background: var(--ink-700);
+}
+
+.md-image span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.md-image:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+
 /* ---------------------------------------------------------------- login modal */
 
 .scrim {

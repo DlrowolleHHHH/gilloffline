@@ -7,8 +7,9 @@ import { currentUserid, toast, withUserid } from './shared.js';
 import { fetchSession, login, setLoginPrompt } from './editor-io.js';
 import * as textpng from './tool-textpng.js';
 import * as pngsvg from './tool-pngsvg.js';
+import * as mdhtml from './tool-mdhtml.js';
 
-const TOOLS = ['textpng', 'pngsvg'];
+const TOOLS = ['textpng', 'pngsvg', 'mdhtml'];
 const $ = (id) => document.getElementById(id);
 /** '?userid=…' means we are making images for a sub-admin's site. */
 const forUser = currentUserid() !== '';
@@ -122,6 +123,7 @@ function boot() {
   bindTools();
   textpng.init();
   pngsvg.init();
+  mdhtml.init();
   refreshSession();
   // a save that just worked is the freshest word on whether we are logged in
   window.addEventListener('gill:saved', refreshSession);
