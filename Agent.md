@@ -16,7 +16,6 @@
 | `web/js/board.js` | 棋盘的交互与渲染：拖拽手势、网格吸附、ghost 预览、行数增长 |
 | `web/js/admin.js` | 管理页把两者接起来：工具条（列数/间隔/缩放）、抽屉（含**自绘取色面板**：SV 区 + 色相/透明度条 + HEX/RGB/HSV + 吸管）、脏标记；身份胶囊、**盒子分享**（选盒子模式 + 分享窗口）、「我分享的盒子」/「盒子仓库」面板 |
 | `web/js/home.js` | 主页：套用 `site` 设置（强调色、间隔、布局）并渲染；子管理员的站（`?userid=…`）还会亮出右上角那个 `#admin-entry`（`position: fixed` + `z-index: 40`，**故意压在**全屏嵌入 80/81 和提示条 60 下面） |
-| `web/lib/vitsrv.js` | 盒子应用的「虚拟后端」：经典脚本（跨域不用 CORS），等父页面 `postMessage` 配置，按 `remote` / `inline` / `none` 路由请求。设计见 [vitsrv.md](vitsrv.md) |
 | `server/repository.js` | 盒子仓库：全局共享的盒子清单（SQLite `boxes` 表，按 label / created_at 建了索引），按 label 归类；入仓前过 `store.normalizeCell` 清洗；旧版 `repository.json` 首次访问时导入并改名 |
 | `web/css/admin.css` | `.admin-board`（棋盘容器）与 `.admin-board::before`（格线） |
 | `data/site.json` | 提交进仓库的种子数据，运行时只读（首次部署时复制到数据目录） |
@@ -74,13 +73,6 @@
 - 沙箱 iframe 只在 `createFrame()`（`web/js/shared.js`）里创建一处，**不要**在别处手写 iframe：
   那条规则是「一律非 same-origin 沙箱」，加了 `allow-same-origin` 等于把本站的登录状态交给页面。
   全屏展开用的也是它。
-- **盒子应用的后端配置挂在 `cell.backend` 上**：`{ mode: 'none' | 'remote' | 'inline', url, code }`。
-  投递链是「`createCell` 写 `data-vitsrv` → `openFullscreen` 读出来 → `createFrame` 在 iframe
-  `load` 时 `postMessage({ type: 'vitsrv:config', version: 1 })`」。`vitsrv.js` **只认
-  `event.source === window.parent` 的第一份配置**；`url` / `code` 在切模式时都保留。
-  `inline` 代码是 `new Function('vitsrv', code)` 编译、必须 `return` 一个处理函数 —— 它不是安全边界
-  （和页面同权），别把它当沙箱里的沙箱。远程后端是**浏览器直连**：`credentials: 'omit'`、
-  要 CORS；HTTPS 页面不能连 HTTP 后端（Mixed Content）。
 - `responsive` 那五个键**只对 board 有意义**：flow 本来就会跟着窗口重排，用不到分档
   （`repackColumns()` 对 flow 直接返回 0）。**`padColumns` / `phoneColumns` 的 0 是合法值**
   （这一档不重排），读的时候不能用 `||`。阈值是「设备」概念，判据是
@@ -246,9 +238,6 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 7. 窄屏重排：`responsive` 缺省时各宽度**逐像素**和改动前一致（先存指纹再比对）；
    打开后各档 `--cols` 分别是棋盘列数 / pad / 手机，重排的那几档**一律不横向溢出**，
    位置与 `packBoard(cells, N)` 逐格相同，且跨档切换不刷新页面、格子还是同一批 DOM 节点。
-8. vitsrv：`inline` / `remote` / `none` 三种模式都能在应用页里拿到配置（`none` 立刻 resolve，
-   不是等 8 秒）；remote 的 JSON POST 能过 CORS 预检；应用页仍是 `window.origin === 'null'`
-   的不透明源；直接打开应用页（没有父页面）8 秒后报 `NO_CONFIG`。
 
 ## 7. 踩过的坑（症状 → 原因）
 
@@ -274,8 +263,6 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 | 全屏展开时嵌页只有 300×150，或留白只在左右生效 | iframe 是**替换元素**：`position: absolute` + `left/top/right/bottom` 不会把它撑开（退回 300×150），百分比高度在 `calc()` 里各浏览器也不一致。**留白要加在外层普通 div（`.fullscreen__area`）上，iframe 在里面 `100%` 铺满** |
 | 按 Esc 收取色面板，连抽屉一起关了 | 抽屉的 Esc 处理和面板的都挂在 `document` 上；`stopPropagation()` 挡不住同一个节点上的其它监听，要用 `stopImmediatePropagation()`（面板那个先注册，先跑） |
 | 点「尺寸」把格子的点击行为改了 | `bindActionTabs()` 原来扫全页的 `.segmented__btn`；棋盘上方新加的那组也是这个类，被一起接上了。**分组控件的选择器要带容器**（现在扫 `#action-tabs`） |
-| 应用页面里 `vitsrv` 一直等配置 / 报 `NO_CONFIG` | iframe 不是 `createFrame()` 建的，或 `createCell` 没把 `cell.backend` 写进 `data-vitsrv`、`openFullscreen` 没透传。配置只在 `load` 之后发一次（导航会重新触发 load），别手动 `contentWindow` 又写一份 |
-| 应用页面里 `fetch` 远程后端被浏览器拦掉 | 跨域没放行（沙箱页面的源是 `null`，要 `Access-Control-Allow-Origin: *` + `OPTIONS` 预检）；或者 HTTPS 页面直连了 HTTP 后端（Mixed Content） |
 
 ## 8. 改这块代码之前的检查表
 
@@ -290,6 +277,4 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 - [ ] 手势的几个入口（格子本体 / 右下角方块，方块还有两种模式）都还汇到同一个 `startDrag`？
       新加的分段控件没被抽屉那套 `bindActionTabs` 误接上？
 - [ ] 主页的详情面板还是「鼠标 hover / 键盘 `:focus-visible` / 触屏 `.is-open`」三条，没有哪一条会赖着不动？
-- [ ] 盒子应用的后端配置还是 `data-vitsrv` → `fullscreenOptions()` → `createFrame()` 一条链，
-      `none` 也会投递（否则应用要白等 8 秒超时）？
-- [ ] 上面第 6 节那八条断言都跑过？
+- [ ] 上面第 6 节那七条断言都跑过？

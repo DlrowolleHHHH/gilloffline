@@ -191,17 +191,10 @@ function closeFullscreen() {
  */
 function fullscreenOptions(cell) {
   const [v, h] = (cell.dataset.fsMargin || '0/0').split('/').map((n) => Number(n) || 0);
-  let backend = null;
-  try {
-    backend = cell.dataset.vitsrv ? JSON.parse(cell.dataset.vitsrv) : null;
-  } catch {
-    backend = null;
-  }
   return {
     margin: [v, h, v, h],
     radius: Number(cell.dataset.fsRadius ?? 14),
     color: cell.dataset.fsColor || '',
-    backend,
   };
 }
 
@@ -221,8 +214,7 @@ function openFullscreen(url, title, rect, options = {}) {
   // 不直接把 inset/calc 写在 iframe 上：它是替换元素，各浏览器的尺寸规则不一样，容易踩坑。
   const area = document.createElement('div');
   area.className = 'fullscreen__area';
-  // 第三个参数是盒子应用的后端配置：createFrame 会在 load 之后发给里面的 vitsrv
-  const frame = sharedCreateFrame(url, title, options.backend);
+  const frame = sharedCreateFrame(url, title);
   frame.className = 'fullscreen__frame';
   frame.loading = 'eager'; // 这回是真要看它了
   area.append(frame);

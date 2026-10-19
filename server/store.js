@@ -66,9 +66,6 @@ const MAX_CELLS = 200;
 const MAX_TITLE = 120;
 const MAX_BODY = 2000;
 const MAX_URL = 2048;
-/** 盒子应用「内置后端」的代码上限（字符串长度）。 */
-const MAX_BACKEND_CODE = 20000;
-const BACKEND_MODES = ['none', 'remote', 'inline'];
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_COLS = 12;
 const MIN_BOARD_COLS = 3;
@@ -153,28 +150,6 @@ function safePageUrl(value) {
   if (/^\/pages\/(?!\.\.?$)[\p{L}\p{N}._-]+$/u.test(raw)) return raw;
   if (/^\/u\/[0-9a-f]{64}\/pages\/(?!\.\.?$)[\p{L}\p{N}._-]+$/u.test(raw)) return raw;
   return /^https?:\/\//i.test(raw) ? raw : '';
-}
-
-/** 盒子应用的后端地址：只收绝对的 http(s)，别的都当没填。 */
-function safeBackendUrl(value) {
-  const raw = clampText(value, MAX_URL);
-  return /^https?:\/\/[^\s]+$/i.test(raw) ? raw : '';
-}
-
-/**
- * 盒子应用的「虚拟后端」：mode 决定哪一份配置生效，但 url / code 都留着 ——
- * 切来切去不丢（和 clickMode 的做法一致）。
- *   none   — 不挂后端
- *   remote — 真实的机器：http(s)://ip:port
- *   inline — 一段 JS：vitsrv 把它编译成处理函数
- */
-function normalizeBackend(raw) {
-  const src = raw && typeof raw === 'object' ? raw : {};
-  return {
-    mode: oneOf(src.mode, BACKEND_MODES, 'none'),
-    url: safeBackendUrl(src.url),
-    code: clampText(src.code, MAX_BACKEND_CODE),
-  };
 }
 
 function newId() {
@@ -266,7 +241,6 @@ function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
     link: safeUrl(src.link),
     overlay: normalizeOverlay(src.overlay),
     fullscreen: normalizeFullscreen(src.fullscreen),
-    backend: normalizeBackend(src.backend),
   };
 
   // Positions are kept in both layouts: a flow doc that has been on a board must

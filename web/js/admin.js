@@ -7,7 +7,6 @@ import {
   cellUnits,
   createCell,
   currentUserid,
-  defaultBackend,
   defaultCell,
   defaultFullscreen,
   FS_MARGINS,
@@ -443,9 +442,6 @@ const els = {
   fsRadius: $('ed-fs-radius'),
   fsColor: $('ed-fs-color'),
   fsColorText: $('ed-fs-color-text'),
-  backendMode: $('ed-backend-mode'),
-  backendUrl: $('ed-backend-url'),
-  backendCode: $('ed-backend-code'),
   color: $('ed-color'),
   colorText: $('ed-color-text'),
   ovEnabled: $('ed-ov-enabled'),
@@ -942,11 +938,6 @@ function fillForm(cell) {
   setMarginMode(fs.margin);
   els.fsRadius.value = fs.radius;
   setColorPicker(els.fsColor, els.fsColorText, fs.color);
-  const backend = { ...defaultBackend(), ...(cell.backend || {}) };
-  els.backendMode.value = backend.mode;
-  els.backendUrl.value = backend.url;
-  els.backendCode.value = backend.code;
-  syncBackendFields();
   els.ovEnabled.checked = cell.overlay.enabled;
   els.ovTitle.value = cell.overlay.title;
   els.ovBody.value = cell.overlay.body;
@@ -1009,12 +1000,6 @@ function bindActionTabs() {
   }
 }
 
-/** 应用后端：选了哪种模式才显示哪一栏。 */
-function syncBackendFields() {
-  $('field-backend-url').hidden = els.backendMode.value !== 'remote';
-  $('field-backend-code').hidden = els.backendMode.value !== 'inline';
-}
-
 function syncTypeVisibility() {
   const type = els.type.value;
   $('fs-image').hidden = type !== 'image';
@@ -1044,12 +1029,6 @@ function applyForm() {
     margin: fsMarginMode,
     radius: Math.min(64, Math.max(0, Math.round(Number(els.fsRadius.value) || 0))),
     color: readColorPicker(els.fsColor, els.fsColorText, '#08070d'),
-  };
-  // 地址和代码都留着，切模式不丢（和 clickMode 一个套路）
-  cell.backend = {
-    mode: els.backendMode.value,
-    url: els.backendUrl.value.trim(),
-    code: els.backendCode.value,
   };
   cell.overlay = {
     enabled: els.ovEnabled.checked,
@@ -1230,17 +1209,12 @@ function bindEditor() {
     els.type, els.borderWidth, els.radius, els.image, els.html, els.embed, els.fit,
     els.imageTitle, els.color, els.color, els.ovEnabled, els.ovTitle, els.ovBody,
     els.ovDir, els.ovRatio, els.link,
-    els.fsRadius, els.backendUrl, els.backendCode,
+    els.fsRadius,
   ];
   for (const element of new Set(live)) element.addEventListener('input', onEdited);
 
   els.type.addEventListener('change', () => {
     syncTypeVisibility();
-    onEdited();
-  });
-
-  els.backendMode.addEventListener('change', () => {
-    syncBackendFields();
     onEdited();
   });
 
@@ -2182,41 +2156,7 @@ function markDirty() {
   $('dirty-flag').hidden = false;
 }
 
-/**
- * 应用后端存下去之前先看一眼。只有「真正会打开的嵌入页」才有后端：
- * 远程模式必须是 http(s) 地址，内置模式不能是空代码 —— 否则服务端会把它们洗成默认值，
- * 页面看起来保存成功、实际请求却永远失败。
- */
-const BACKEND_URL_RE = /^https?:\/\/[^\s]+$/i;
-
-function backendProblem() {
-  for (const cell of state.doc.cells) {
-    const embed = cell.clickMode === 'link' ? '' : cell.embed || '';
-    const backend = cell.backend;
-    if (!embed || !backend || backend.mode === 'none') continue;
-    const name = cell.imageTitle || '未命名格子';
-    if (backend.mode === 'remote') {
-      if (!BACKEND_URL_RE.test(String(backend.url || '').trim())) {
-        return { cellId: cell.id, message: `「${name}」的后端地址要以 http:// 或 https:// 开头。` };
-      }
-    } else if (backend.mode === 'inline') {
-      if (!String(backend.code || '').trim()) {
-        return { cellId: cell.id, message: `「${name}」选了内置 JS，但代码是空的。` };
-      }
-    } else {
-      return { cellId: cell.id, message: `「${name}」的后端模式不对。` };
-    }
-  }
-  return null;
-}
-
 async function save() {
-  const problem = backendProblem();
-  if (problem) {
-    toast(problem.message, 'error');
-    openDrawer(problem.cellId); // 直接打开那颗格子的抽屉，省得用户自己找
-    return;
-  }
   const button = $('btn-save');
   button.disabled = true;
   try {

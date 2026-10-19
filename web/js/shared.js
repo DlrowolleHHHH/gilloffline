@@ -59,14 +59,6 @@ export function defaultFullscreen() {
   return { margin: '0/0', radius: 14, color: '#08070d' };
 }
 
-/**
- * 盒子应用的后端：mode 决定哪份生效（url / code 都留着，切换不丢）。
- * 具体怎么用见 /lib/vitsrv.js —— 应用页面通过 vitsrv 调后端。
- */
-export function defaultBackend() {
-  return { mode: 'none', url: '', code: '' };
-}
-
 export function defaultCell(overrides = {}) {
   return {
     id: newId(),
@@ -84,7 +76,6 @@ export function defaultCell(overrides = {}) {
     link: '',
     overlay: defaultOverlay(),
     fullscreen: defaultFullscreen(),
-    backend: defaultBackend(),
     ...overrides,
   };
 }
@@ -138,7 +129,7 @@ export function applyCellStyle(node, cell) {
  * 集中在这里，是为了让「HTML 页面一律跑在非 same-origin 的沙箱里」这条规则只有
  * 一个出处：沙箱**不能**加 allow-same-origin（那等于把本站的登录状态交给页面）。
  */
-export function createFrame(src, title, backend) {
+export function createFrame(src, title) {
   const frame = document.createElement('iframe');
   frame.className = 'cell__frame';
   frame.src = src;
@@ -146,22 +137,6 @@ export function createFrame(src, title, backend) {
   frame.title = title || '嵌入的页面';
   frame.referrerPolicy = 'no-referrer';
   frame.setAttribute('sandbox', FRAME_SANDBOX);
-
-  // 盒子应用的后端配置：等页面加载完，postMessage 给里面的 vitsrv。
-  // mode: 'none' 也要发 —— 应用才能立刻知道「没挂后端」，而不是等 8 秒超时。
-  // 沙箱页面是不透明源，目标 origin 只能是 '*'；vitsrv 只认 window.parent 发来的消息。
-  if (backend && backend.mode) {
-    frame.addEventListener('load', () => {
-      try {
-        frame.contentWindow.postMessage(
-          { type: 'vitsrv:config', version: 1, backend: { mode: backend.mode, url: backend.url || '', code: backend.code || '' } },
-          '*'
-        );
-      } catch {
-        /* 页面已经被移除了 */
-      }
-    });
-  }
   return frame;
 }
 
@@ -245,9 +220,6 @@ export function createCell(cell) {
     node.dataset.fsMargin = FS_MARGINS.includes(fs.margin) ? fs.margin : '0/0';
     node.dataset.fsRadius = String(Number(fs.radius) || 0);
     node.dataset.fsColor = fs.color || defaultFullscreen().color;
-    // 应用后端（打开全屏时交给 createFrame 发给 vitsrv）
-    const backend = { ...defaultBackend(), ...(cell.backend || {}) };
-    node.dataset.vitsrv = JSON.stringify(backend);
     const expand = document.createElement('span');
     expand.className = 'cell__expand';
     expand.setAttribute('role', 'button');
