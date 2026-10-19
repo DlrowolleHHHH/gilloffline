@@ -24,7 +24,7 @@ const ACTIONS = [
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onSelect, onChildEdit }) {
+export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onSelect }) {
   let cells = [];
   let columns = 12;
   let selectedId = null;
@@ -412,16 +412,8 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
         if (button.dataset.act === 'del') onRemove(id);
         return;
       }
-      // 点容器里的子盒子：直接打开它自己的编辑面板（不是容器的）。
-      // 卡片本体（边框 / 空白）照旧是 select → onSelect → 打开容器编辑。
-      const child = event.target.closest('[data-child-index]');
-      if (child && slot) {
-        event.preventDefault();
-        if (justDragged) return;
-        select(slot.dataset.id);
-        if (onChildEdit) onChildEdit(slot.dataset.id, Number(child.dataset.childIndex));
-        return;
-      }
+      // 容器里的子盒子不再单独接点击：轮播 / 瀑布都先打开容器面板，
+      // 子盒子从抽屉里的列表进入（子盒子铺满容器时否则容器面板永远打不开）。
       if (slot && !justDragged) {
         event.preventDefault();
         select(slot.dataset.id);

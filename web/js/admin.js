@@ -278,12 +278,8 @@ const board = createBoard({
   onRemove: (id) => removeCell(id),
   onSelect: (id) => {
     if (sharing) return openShareDialog(id); // 选盒子模式：点格子是挑它去分享
+    // 子盒子（轮播 / 瀑布）也从这里进：先开容器面板，再从列表点进子盒子。
     openDrawerUnlessCurrent(id, { withSizes: true });
-  },
-  // 点容器里的子盒子：直接打开它的编辑面板（onSelect 已经把容器面板打开了）
-  onChildEdit: (id, index) => {
-    if (sharing) return; // 选盒子模式已经由 onSelect 处理成分享容器
-    openChildEditor(id, index);
   },
   // a move or a resize has already patched its own slot, so there is nothing to
   // re-render here — just remember that the document is unsaved

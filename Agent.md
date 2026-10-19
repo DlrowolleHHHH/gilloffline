@@ -13,7 +13,7 @@
 | --- | --- |
 | `server/store.js` | 数据模型、清洗（sanitize）、**不重叠修复**（保存时的最后防线） |
 | `web/js/shared.js` | 几何与布局核心：`applyGridLayout`、`packBoard`、`repairBoard`、`firstFreeSpot`、碰撞判断；格子 DOM（`createCell`）、容器轮播（`createCarousel`、定时器）与瀑布（`createWaterfall`、Z 字 / 最短列排布、ResizeObserver） |
-| `web/js/board.js` | 棋盘的交互与渲染：拖拽手势、网格吸附、ghost 预览、行数增长；子盒子点击走 `onChildEdit`，轮播箭头 `data-no-drag` 不触发拖拽 |
+| `web/js/board.js` | 棋盘的交互与渲染：拖拽手势、网格吸附、ghost 预览、行数增长；容器里的子盒子不单独接点击（从抽屉列表进入），轮播箭头 `data-no-drag` 不触发拖拽 |
 | `web/js/admin.js` | 管理页把两者接起来：工具条（列数/间隔/缩放）、抽屉（**模板克隆出主面板 + 容器子盒子面板**；轮播 / 瀑布两组设置、瀑布子盒子尺寸、**自绘取色面板**：SV 区 + 色相/透明度条 + HEX/RGB/HSV + 吸管）、脏标记；身份胶囊、**盒子分享**（选盒子模式 + 分享窗口）、「我分享的盒子」/「盒子仓库」面板 |
 | `web/js/home.js` | 主页：套用 `site` 设置（强调色、间隔、布局）并渲染；子管理员的站（`?userid=…`）还会亮出右上角那个 `#admin-entry`（`position: fixed` + `z-index: 40`，**故意压在**全屏嵌入 80/81 和提示条 60 下面） |
 | `server/repository.js` | 盒子仓库：全局共享的盒子清单（SQLite `boxes` 表，按 label / created_at 建了索引），按 label 归类；入仓前过 `store.normalizeCell` 清洗；旧版 `repository.json` 首次访问时导入并改名 |
@@ -315,11 +315,12 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 - **子面板预览**：轮播子盒子按父容器的 `w × h` 画（`cellUnits(parent)`）；
   瀑布子盒子按 `effectiveUnits(child, columns)` 画（宽度裁到列数、高度按模版）——
   绝不把子盒子原始尺寸里的宽度直接当成实际宽度。
-- **棋盘上的子盒子**：只有**瀑布**的 `.waterfall__item` / 子 cell 带 `data-child-index`，
-  `board.js` 的 click 分支命中它就走 `onChildEdit(容器 id, 下标)`。
-  **轮播故意不挂这个属性**：轮播子盒子铺满整个容器，点到哪儿都是子盒子；如果按子盒子处理，
-  容器自己的编辑面板就永远打不开。轮播里编辑子盒子走容器面板里的列表。
+- **容器里的子盒子不单独接棋盘点击**：轮播和瀑布都不给子盒子挂 `data-child-index`。
+  轮播子盒子铺满整个容器，瀑布的子盒子又容易误点——按子盒子处理会让容器自己的编辑面板
+  很难打开。统一规则：**点棋盘（包括点到子盒子）打开容器面板，子盒子从容器面板的列表进入**。
   轮播箭头带 `data-no-drag`，`onPointerDown` 直接跳过。
+- **子盒子面板仍然从列表打开**：`openChildEditor(容器 id, 下标)` 会先确保容器主面板已经打开，
+  再把子面板从右侧滑上来；列表行和子面板的删除都按这个入口 / 下标工作。
 - **空容器 / 单个子盒子**：都安全；没有箭头、没有定时器。空容器分别显示
   `.carousel__empty` / `.waterfall__empty`。
 
@@ -344,5 +345,6 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 - [ ] 两个抽屉实例的 id 不冲突（子面板 `nx-` 前缀，**根节点也加了**）？没有残留的全页 `$('ed-…')` / `.segmented__btn` 扫描？
 - [ ] 保存 / 导入后，抽屉里的 cell 引用重新指向新文档，没有写回孤儿对象？
 - [ ] 轮播计时器在节点被替换后能自行退出？切后台 / 悬停 / 触屏详情只暂停一拍，不会把计时链断死？
-- [ ] 棋盘上点子盒子打开的是子盒子面板、拖拽仍然移动容器、点箭头不会触发拖拽？瀑布子盒子同样走 `data-child-index`？
+- [ ] 棋盘上点容器（包括点到里面的子盒子）打开的是**容器面板**？子盒子从列表进入？
+      拖拽仍然移动容器、点轮播箭头不会触发拖拽？
 - [ ] 上面第 6 节那七条断言都跑过？

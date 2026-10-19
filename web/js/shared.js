@@ -598,13 +598,12 @@ function createWaterfall(spec) {
   board.className = 'waterfall__board';
   root.append(board);
 
-  const wrappers = spec.items.map((item, index) => {
+  const wrappers = spec.items.map((item) => {
     const wrap = document.createElement('div');
     wrap.className = 'waterfall__item';
-    wrap.dataset.childIndex = String(index);
-    // 子盒子没有 id：容器内用下标定位（和轮播一致）
+    // 不在棋盘上按子盒子处理：点瀑布（包括里面的盒子）打开的是容器面板。
+    // 子盒子从容器列表进入，和轮播保持一致。
     const child = createCell(item, { autoplay: false });
-    child.dataset.childIndex = String(index);
     wrap.append(child);
     board.append(wrap);
     return wrap;
