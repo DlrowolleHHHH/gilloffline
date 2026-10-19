@@ -20,6 +20,35 @@ export const SIZES = {
 
 export const SIZE_ORDER = ['1x1', '1x2', '1x4', '2x2', '3x3', '4x4', '2x4', '3x6', '4x8'];
 
+/**
+ * 瀑布子盒子的尺寸模版：宽度 1..3、高度 1..4。键仍然是「行×列」——
+ * `2x1` = 宽 1 × 高 2 的竖条。和顶层的 SIZES 分开，免得把窄高尺寸
+ * 塞进普通格子和创作工具的尺寸选择器里。
+ */
+export const WATERFALL_SIZES = {
+  '1x1': { w: 1, h: 1, label: '方块', note: '宽 1 × 高 1' },
+  '2x1': { w: 1, h: 2, label: '竖条', note: '宽 1 × 高 2' },
+  '3x1': { w: 1, h: 3, label: '高竖条', note: '宽 1 × 高 3' },
+  '4x1': { w: 1, h: 4, label: '长竖条', note: '宽 1 × 高 4' },
+  '1x2': { w: 2, h: 1, label: '横条', note: '宽 2 × 高 1' },
+  '2x2': { w: 2, h: 2, label: '方块', note: '宽 2 × 高 2' },
+  '3x2': { w: 2, h: 3, label: '高块', note: '宽 2 × 高 3' },
+  '4x2': { w: 2, h: 4, label: '长高块', note: '宽 2 × 高 4' },
+  '1x3': { w: 3, h: 1, label: '宽横条', note: '宽 3 × 高 1' },
+  '2x3': { w: 3, h: 2, label: '宽块', note: '宽 3 × 高 2' },
+  '3x3': { w: 3, h: 3, label: '大方块', note: '宽 3 × 高 3' },
+  '4x3': { w: 3, h: 4, label: '高大方块', note: '宽 3 × 高 4' },
+};
+
+export const WATERFALL_SIZE_ORDER = [
+  '1x1', '2x1', '3x1', '4x1',
+  '1x2', '2x2', '3x2', '4x2',
+  '1x3', '2x3', '3x3', '4x3',
+];
+
+/** 尺寸模版的统一查表：顶层格子用 SIZES，瀑布子盒子还可能是 WATERFALL_SIZES。 */
+export const sizeDef = (key) => SIZES[key] || WATERFALL_SIZES[key] || null;
+
 /** `direction` is the side the detail panel slides in from. */
 export const DIRECTIONS = [
   { value: 'left', label: '从左滑入' },
@@ -33,8 +62,20 @@ export const RATIOS = [
   { value: '1/2', label: '覆盖一半（1/2）' },
 ];
 
-/** 容器盒子的模式。目前只有轮播；列表留着给以后的模式。 */
-export const CONTAINER_MODES = [{ value: 'carousel', label: '轮播' }];
+/** 容器盒子的模式：轮播 / 瀑布。 */
+export const CONTAINER_MODES = [
+  { value: 'carousel', label: '轮播' },
+  { value: 'waterfall', label: '瀑布' },
+];
+
+/** 瀑布的排布方式：Z 字（行优先）/ 最短列。 */
+export const CONTAINER_RENDERS = [
+  { value: 'z', label: 'Z 字顺序' },
+  { value: 'shortest', label: '最短列' },
+];
+
+/** 瀑布可选列数。 */
+export const CONTAINER_COLUMNS = [1, 2, 3];
 
 /** 轮播方向 = 内容移动的方向（不是「从哪边进来」的悬浮详情 DIRECTIONS）。 */
 export const CONTAINER_DIRECTIONS = [
@@ -48,6 +89,20 @@ export const CONTAINER_DIRECTIONS = [
 export const CONTAINER_INTERVAL = { min: 2, max: 60, fallback: 5 };
 /** 一个容器最多放多少个盒子 —— 镜像 server/store.js 的 MAX_CONTAINER_ITEMS。 */
 export const MAX_CONTAINER_ITEMS = 30;
+
+/**
+ * 瀑布内部虚拟棋盘的「格距」下限：列数 > 1 时，一格（含内边距）至少 96/3 = 32px。
+ * 容器比这个还窄时内部横向滚动；单列时格距就是容器宽度，不做这个下限。
+ */
+export const WATERFALL_UNIT_MIN = 32;
+/** 虚拟棋盘里每个子盒子四周留的缝（格距很小时会按比例缩小）。 */
+export const WATERFALL_GAP = 6;
+/** 默认 / 夹紧后的列数。 */
+export const WATERFALL_DEFAULT_COLUMNS = 2;
+export const clampWaterfallColumns = (value) => {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? Math.min(3, Math.max(1, n)) : WATERFALL_DEFAULT_COLUMNS;
+};
 
 /** Unique id for a freshly created cell. */
 export function newId() {
@@ -96,9 +151,17 @@ export function defaultCell(overrides = {}) {
   };
 }
 
-/** 新建容器时的默认配置：轮播、向左、自动、5 秒、空列表。 */
+/** 新建容器时的默认配置：轮播、向左、自动、5 秒、瀑布 2 列 Z 字、空列表。 */
 export function defaultContainer() {
-  return { mode: 'carousel', direction: 'left', autoplay: true, interval: CONTAINER_INTERVAL.fallback, items: [] };
+  return {
+    mode: 'carousel',
+    direction: 'left',
+    autoplay: true,
+    interval: CONTAINER_INTERVAL.fallback,
+    columns: WATERFALL_DEFAULT_COLUMNS,
+    render: 'z',
+    items: [],
+  };
 }
 
 /**
@@ -115,26 +178,38 @@ export function containerSpec(cell) {
     : 'left';
   const interval = Math.round(Number(raw.interval));
   return {
-    mode: 'carousel',
+    mode: raw.mode === 'waterfall' ? 'waterfall' : 'carousel',
     direction,
     autoplay: raw.autoplay !== false,
     interval: Number.isFinite(interval)
       ? Math.min(CONTAINER_INTERVAL.max, Math.max(CONTAINER_INTERVAL.min, interval))
       : CONTAINER_INTERVAL.fallback,
+    columns: clampWaterfallColumns(raw.columns),
+    render: raw.render === 'shortest' ? 'shortest' : 'z',
     items: items.slice(0, MAX_CONTAINER_ITEMS),
   };
 }
 
 /**
- * 容器里的子盒子：没有自己的 id / pos，size 只是中性占位 —— 渲染时永远铺满容器，
- * 绝不拿它算尺寸。容器不能嵌套，这里也顺手把 type 兜回图片。
+ * 子盒子在瀑布里实际占的格数：宽度按容器列数裁，高度沿用尺寸模版。
+ * 轮播不用这个（永远铺满），但保留同一个 reader 方便列表 / 预览显示。
+ */
+export function effectiveUnits(item, columns) {
+  const { w, h } = cellUnits(item);
+  return { w: Math.max(1, Math.min(w, clampWaterfallColumns(columns))), h: Math.max(1, h) };
+}
+
+/**
+ * 容器里的子盒子：没有自己的 id / pos。轮播会忽略 size（永远铺满容器）；
+ * 瀑布拿 size 模版占格（宽度渲染时裁到列数、高度原样用）。容器不能嵌套，
+ * 这里也顺手把 type 兜回图片。
  */
 export function childCell(overrides = {}) {
   const cell = defaultCell(overrides);
   delete cell.id;
   delete cell.pos;
   delete cell.container;
-  cell.size = '1x1';
+  cell.size = sizeDef(cell.size) ? cell.size : '1x1';
   if (cell.type === 'container') cell.type = 'image';
   return cell;
 }
@@ -157,7 +232,7 @@ export function cellUnits(cell) {
   if (pos && Number.isFinite(pos.w) && Number.isFinite(pos.h)) {
     return { w: Math.max(1, Math.round(pos.w)), h: Math.max(1, Math.round(pos.h)) };
   }
-  const size = SIZES[(cell && cell.size) || ''] || SIZES['1x1'];
+  const size = sizeDef((cell && cell.size) || '') || SIZES['1x1'];
   return { w: size.w, h: size.h };
 }
 
@@ -167,7 +242,7 @@ export function cellUnits(cell) {
  * real size from the board layout pass.
  */
 export function cellClasses(cell) {
-  const size = SIZES[cell.size] || SIZES['1x1'];
+  const size = sizeDef(cell.size) || SIZES['1x1'];
   const classes = ['cell', `cell--${cell.type}`, `w${size.w}`, `h${size.h}`];
   if (size.w > 1) classes.push(`cell--w${size.w}`);
   return classes;
@@ -467,6 +542,122 @@ function createCarousel(cell, { autoplay = true } = {}) {
   return root;
 }
 
+/* ------------------------------------------------------------ waterfall */
+
+/** Z 字：直接复用棋盘的「行优先、找第一个放得下的空位」。 */
+function packWaterfallZ(items, columns) {
+  return packBoard(items, columns);
+}
+
+/**
+ * 最短列：每个子盒子放到当前最矮的一列；宽度跨多列时，在连续列组里找
+ * 顶面最低的位置。比 Z 字更紧凑，是经典瀑布流。
+ */
+function packWaterfallShortest(items, columns) {
+  const heights = new Array(columns).fill(0);
+  return items.map((item) => {
+    const { w, h } = effectiveUnits(item, columns);
+    let bestX = 0;
+    let bestY = Infinity;
+    for (let x = 0; x + w <= columns; x += 1) {
+      let y = 0;
+      for (let col = x; col < x + w; col += 1) y = Math.max(y, heights[col]);
+      if (y < bestY) {
+        bestY = y;
+        bestX = x;
+      }
+    }
+    for (let col = bestX; col < bestX + w; col += 1) heights[col] = bestY + h;
+    return { ...item, pos: { x: bestX, y: bestY, w, h } };
+  });
+}
+
+/**
+ * 瀑布容器：内部是一块虚拟棋盘，子盒子按尺寸模版占格，超出容器高度就纵向滚动。
+ *
+ * 格距 unit 是「一格」的 pitch：列数 > 1 时至少 32px（96/3），容器更窄就横向滚动；
+ * 单列时 unit = 容器宽度。子盒子在格子里再留一圈 gap，看起来才是一块块分开的盒子。
+ * 位置在渲染时现算，不写进数据。
+ */
+function createWaterfall(node, spec) {
+  const root = document.createElement('div');
+  root.className = 'waterfall';
+  root.dataset.render = spec.render;
+
+  if (!spec.items.length) {
+    const empty = document.createElement('span');
+    empty.className = 'waterfall__empty';
+    empty.textContent = '容器里还没有盒子';
+    root.append(empty);
+    return root;
+  }
+
+  const board = document.createElement('div');
+  board.className = 'waterfall__board';
+  root.append(board);
+
+  const wrappers = spec.items.map((item, index) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'waterfall__item';
+    wrap.dataset.childIndex = String(index);
+    // 子盒子没有 id：容器内用下标定位（和轮播一致）
+    const child = createCell(item, { autoplay: false });
+    child.dataset.childIndex = String(index);
+    wrap.append(child);
+    board.append(wrap);
+    return wrap;
+  });
+
+  const columns = clampWaterfallColumns(spec.columns);
+
+  function layout() {
+    const width = root.clientWidth;
+    // 还没进文档 / 被隐藏：等 ResizeObserver 或下一次打开时再量
+    if (!width) return;
+    // 单列：整宽就是格距；多列：至少 32px，放不下就让内部横向滚动
+    const unit = columns > 1 ? Math.max(WATERFALL_UNIT_MIN, width / columns) : width;
+    const gap = Math.min(WATERFALL_GAP, unit * 0.2);
+    const placed =
+      spec.render === 'shortest'
+        ? packWaterfallShortest(spec.items, columns)
+        : packWaterfallZ(spec.items, columns);
+
+    let rows = 0;
+    for (const item of placed) rows = Math.max(rows, item.pos.y + item.pos.h);
+
+    board.style.width = `${Math.max(width, columns * unit).toFixed(2)}px`;
+    board.style.height = `${Math.max(1, rows * unit).toFixed(2)}px`;
+
+    for (const [index, item] of placed.entries()) {
+      const { x, y, w, h } = item.pos;
+      const wrap = wrappers[index];
+      // 把虚拟棋盘坐标也挂到 dataset 上，方便调试 / 测试
+      wrap.dataset.x = String(x);
+      wrap.dataset.y = String(y);
+      wrap.dataset.w = String(w);
+      wrap.dataset.h = String(h);
+      wrap.style.left = `${(x * unit + gap / 2).toFixed(2)}px`;
+      wrap.style.top = `${(y * unit + gap / 2).toFixed(2)}px`;
+      wrap.style.width = `${Math.max(1, w * unit - gap).toFixed(2)}px`;
+      wrap.style.height = `${Math.max(1, h * unit - gap).toFixed(2)}px`;
+    }
+  }
+
+  if (typeof ResizeObserver === 'function') {
+    const observer = new ResizeObserver(() => {
+      if (!root.isConnected) {
+        observer.disconnect();
+        return;
+      }
+      layout();
+    });
+    observer.observe(root);
+  }
+  // createCell 返回的节点此刻还没 append；微任务里通常已经进文档了。
+  queueMicrotask(layout);
+  return root;
+}
+
 /**
  * Build the DOM for one showcase cell. `options.autoplay = false` keeps previews
  * still while editing (the admin board passes it); the home page uses the data.
@@ -483,8 +674,9 @@ export function createCell(cell, { autoplay = true } = {}) {
   if (cell.id) node.dataset.id = cell.id;
   node.dataset.fit = cell.imageFit;
   // the layout pass needs the units; the classes alone are not readable back
-  node.dataset.w = SIZES[cell.size] ? SIZES[cell.size].w : 1;
-  node.dataset.h = SIZES[cell.size] ? SIZES[cell.size].h : 1;
+  const units = sizeDef(cell.size);
+  node.dataset.w = units ? units.w : 1;
+  node.dataset.h = units ? units.h : 1;
   if (clickLink) node.draggable = false; // a native link drag fights the board
   applyCellStyle(node, cell);
 
@@ -494,9 +686,12 @@ export function createCell(cell, { autoplay = true } = {}) {
     node.rel = 'noopener noreferrer';
   }
 
-  // 容器：自己的链接 / 嵌入 / 角标 / 悬浮详情都不渲染，整块交给轮播
+  // 容器：自己的链接 / 嵌入 / 角标 / 悬浮详情都不渲染，整块交给模式渲染器
   if (isContainer) {
-    node.append(createCarousel(cell, { autoplay }));
+    const spec = containerSpec(cell);
+    node.append(
+      spec.mode === 'waterfall' ? createWaterfall(node, spec) : createCarousel(cell, { autoplay })
+    );
     return node;
   }
 

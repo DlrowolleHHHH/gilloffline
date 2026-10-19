@@ -1,14 +1,20 @@
 import {
   SIZES,
   SIZE_ORDER,
+  WATERFALL_SIZES,
+  WATERFALL_SIZE_ORDER,
   DIRECTIONS,
   RATIOS,
+  CONTAINER_COLUMNS,
   CONTAINER_DIRECTIONS,
   CONTAINER_INTERVAL,
+  CONTAINER_RENDERS,
   MAX_CONTAINER_ITEMS,
   applyGridLayout,
   cellUnits,
   createCell,
+  effectiveUnits,
+  clampWaterfallColumns,
   currentUserid,
   childCell,
   defaultCell,
@@ -892,13 +898,18 @@ function createCellEditor({ nested = false, prefix = '' } = {}) {
     fileUploadEmbed: byId('upload-file-embed'),
     btnOpenEmbed: byId('btn-open-embed'),
     containerMode: byId('ed-container-mode'),
+    containerCarouselSettings: byId('container-carousel-settings'),
+    containerWaterfallSettings: byId('container-waterfall-settings'),
     containerDirection: byId('ed-container-direction'),
     containerTrigger: byId('ed-container-trigger'),
     containerInterval: byId('ed-container-interval'),
     containerIntervalField: byId('field-container-interval'),
+    containerColumns: byId('ed-container-columns'),
+    containerRender: byId('ed-container-render'),
     containerItems: byId('ed-container-items'),
     containerAdd: byId('btn-container-add'),
     containerImport: byId('btn-container-import'),
+    sizesHint: byId('sizes-hint'),
   };
 
   if (nested) {
@@ -971,10 +982,11 @@ function createCellEditor({ nested = false, prefix = '' } = {}) {
     }
   }
 
-  function buildSizeOptions() {
+  function buildSizeOptions(keys = SIZE_ORDER) {
     els.sizes.replaceChildren();
-    for (const key of SIZE_ORDER) {
-      const size = SIZES[key];
+    for (const key of keys) {
+      const size = SIZES[key] || WATERFALL_SIZES[key];
+      if (!size) continue;
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'size-option';
@@ -1000,9 +1012,13 @@ function createCellEditor({ nested = false, prefix = '' } = {}) {
       button.append(shape, label, note);
       button.addEventListener('click', () => {
         const cell = editor.cell;
-        if (!cell || nested) return;
+        if (!cell) return;
         cell.size = key; // the flow layout's size, kept in step for the fallback
-        if (isBoard()) {
+        if (nested) {
+          // 瀑布子盒子只存尺寸模版；内部位置由瀑布布局现算，绝不写 pos。
+          // （轮播子盒子的尺寸模版会被忽略，但保留它能让模式切换不丢高矮设置。）
+          delete cell.pos;
+        } else if (isBoard()) {
           const others = state.doc.cells.filter((item) => item.id !== cell.id).map(rectOf).filter(Boolean);
           const current = cell.pos || { x: 0, y: 0 };
           const wanted = { x: current.x, y: current.y, w: Math.min(size.w, boardCols()), h: size.h };
@@ -1016,17 +1032,35 @@ function createCellEditor({ nested = false, prefix = '' } = {}) {
     }
   }
 
+  /**
+   * 尺寸选择器按上下文换一套：主面板用普通尺寸；瀑布子盒子用窄高尺寸，
+   * 只列出宽度不超过容器列数的那些。keys 不变就不重建（避免每次 fill 闪一下）。
+   */
+  function ensureSizeOptions(keys = SIZE_ORDER) {
+    const signature = keys.join(',');
+    if (editor.sizeKeySignature === signature) return;
+    editor.sizeKeySignature = signature;
+    buildSizeOptions(keys);
+    syncSizeButtons();
+  }
+
   function syncSizeButtons() {
     const cell = editor.cell;
     const units = cell ? cellUnits(cell) : null;
+    const boardLimit = !nested && isBoard() ? boardCols() : 0;
     for (const button of els.sizes.querySelectorAll('.size-option')) {
-      const size = SIZES[button.dataset.size];
-      // on a board the real size is pos.w/h — a freehand size matches no preset
-      const pressed = isBoard()
-        ? units && units.w === size.w && units.h === size.h
-        : button.dataset.size === cell?.size;
+      const size = SIZES[button.dataset.size] || WATERFALL_SIZES[button.dataset.size];
+      if (!size) continue;
+      // 子盒子用尺寸模版本身作为选中值（瀑布的位置是算出来的，没有 pos）
+      // 主棋盘上则比较实际的 pos.w/h —— 手拖出来的尺寸不对应任何模版
+      const pressed = nested
+        ? button.dataset.size === cell?.size
+        : isBoard()
+          ? units && units.w === size.w && units.h === size.h
+          : button.dataset.size === cell?.size;
       button.setAttribute('aria-pressed', String(Boolean(pressed)));
-      button.disabled = isBoard() && size.w > boardCols();
+      // 主棋盘：比列数还宽的模版禁用；子盒子：宽度会在渲染时裁到容器列数，都可用
+      button.disabled = boardLimit > 0 && size.w > boardLimit;
     }
   }
 
@@ -1038,6 +1072,14 @@ function createCellEditor({ nested = false, prefix = '' } = {}) {
     els.containerDirection.replaceChildren();
     for (const option of CONTAINER_DIRECTIONS) {
       els.containerDirection.append(new Option(option.label, option.value));
+    }
+    els.containerColumns.replaceChildren();
+    for (const value of CONTAINER_COLUMNS) {
+      els.containerColumns.append(new Option(`${value} 列`, String(value)));
+    }
+    els.containerRender.replaceChildren();
+    for (const option of CONTAINER_RENDERS) {
+      els.containerRender.append(new Option(option.label, option.value));
     }
   }
 
@@ -1086,13 +1128,29 @@ function createCellEditor({ nested = false, prefix = '' } = {}) {
       els.thumbWrap.hidden = true;
     }
 
-    syncSizeButtons();
     syncTypeVisibility();
     if (!nested && cell.type === 'container') {
       ensureContainer(cell);
       fillContainerForm(editor, cell);
     }
-    els.sizesField.hidden = nested || editor.withSizes;
+
+    // 子盒子：只有父容器是瀑布时才给尺寸模版（轮播子盒子固定铺满）。
+    const waterfallColumns = parentWaterfallColumns(editor);
+    els.sizesField.hidden = nested ? waterfallColumns === 0 : editor.withSizes;
+    els.sizesHint.hidden = !nested || waterfallColumns === 0;
+    if (!els.sizesHint.hidden) {
+      // 瀑布子盒子用窄高尺寸：只列宽度放得下的那些（1..列数），高度 1–4 格
+      const keys = WATERFALL_SIZE_ORDER.filter((key) => WATERFALL_SIZES[key].w <= waterfallColumns);
+      ensureSizeOptions(keys);
+      const current = SIZES[cell.size] || WATERFALL_SIZES[cell.size];
+      const clamped = Boolean(current && current.w > waterfallColumns);
+      els.sizesHint.textContent =
+        `宽度最多 ${waterfallColumns} 列，高度 1–4 格；位置由瀑布自动排。` +
+        (clamped ? ` 当前尺寸的宽度会裁到 ${waterfallColumns} 列。` : '');
+    } else if (!nested) {
+      ensureSizeOptions(SIZE_ORDER);
+    }
+    syncSizeButtons();
   }
 
   /**
@@ -1185,10 +1243,12 @@ function createCellEditor({ nested = false, prefix = '' } = {}) {
         ? Math.min(CONTAINER_INTERVAL.max, Math.max(CONTAINER_INTERVAL.min, interval))
         : CONTAINER_INTERVAL.fallback;
       cell.container = {
-        mode: 'carousel',
+        mode: els.containerMode.value === 'waterfall' ? 'waterfall' : 'carousel',
         direction: els.containerDirection.value,
         autoplay: els.containerTrigger.value === 'auto',
         interval: clamped,
+        columns: clampWaterfallColumns(els.containerColumns.value),
+        render: els.containerRender.value === 'shortest' ? 'shortest' : 'z',
         items: Array.isArray(previous.items) ? previous.items : [],
       };
       if (els.containerInterval.value !== String(clamped)) els.containerInterval.value = String(clamped);
@@ -1238,7 +1298,14 @@ function createCellEditor({ nested = false, prefix = '' } = {}) {
 
     const site = state.doc.site || {};
     const parent = nested ? editor.parentEditor?.cell : null;
-    const { w, h } = parent ? cellUnits(parent) : cellUnits(cell);
+    const waterfallColumns = parentWaterfallColumns(editor);
+    // 轮播子盒子按容器的长宽比预览；瀑布子盒子按自己「裁宽后」的尺寸预览
+    const { w, h } =
+      parent && waterfallColumns === 0
+        ? cellUnits(parent)
+        : waterfallColumns > 0
+          ? effectiveUnits(cell, waterfallColumns)
+          : cellUnits(cell);
     // Columns the page would give it: a board has a fixed count, a flow document
     // caps the span at the column setting (0 = auto, which is the cell's own width)
     const cols = Math.min(w, isBoard() ? boardCols() : Number(site.columns) || w);
@@ -1293,13 +1360,13 @@ function createCellEditor({ nested = false, prefix = '' } = {}) {
 
   function bind() {
     buildSelects();
-    buildSizeOptions();
+    ensureSizeOptions(SIZE_ORDER);
     buildMarginOptions();
 
     const live = [
       els.type, els.borderWidth, els.radius, els.image, els.html, els.embed, els.fit,
       els.imageTitle, els.color, els.ovEnabled, els.ovTitle, els.ovBody,
-      els.ovDir, els.ovRatio, els.link, els.fsRadius, els.containerMode,
+      els.ovDir, els.ovRatio, els.link, els.fsRadius,
     ];
     for (const element of new Set(live)) element.addEventListener('input', onEdited);
 
@@ -1314,12 +1381,24 @@ function createCellEditor({ nested = false, prefix = '' } = {}) {
     });
 
     // 容器设置：下拉和数字框用 change，别在输入过程中反复重建预览 / 棋盘
+    els.containerMode.addEventListener('change', () => {
+      syncContainerModeVisibility(editor);
+      // 先 applyForm 把新 mode 写进数据，再重渲染列表（列表 meta 按 mode 决定显不显示尺寸）
+      onEdited();
+      renderContainerItems(editor);
+    });
     els.containerTrigger.addEventListener('change', () => {
       syncContainerIntervalVisibility(editor);
       onEdited();
     });
     els.containerDirection.addEventListener('change', onEdited);
     els.containerInterval.addEventListener('change', onEdited);
+    els.containerColumns.addEventListener('change', () => {
+      // 同样先 applyForm 写新列数，列表里的有效 w×h 才是新的
+      onEdited();
+      renderContainerItems(editor);
+    });
+    els.containerRender.addEventListener('change', onEdited);
 
     // 每一行：点色板弹取色面板；文本框里手打 hex 也实时反映到色板上
     for (const [swatch, text, allowNone] of [
@@ -1443,7 +1522,9 @@ function ensureContainer(cell) {
   if (!cell.container || typeof cell.container !== 'object') cell.container = defaultContainer();
   const container = cell.container;
   if (!Array.isArray(container.items)) container.items = [];
-  container.mode = 'carousel';
+  container.mode = container.mode === 'waterfall' ? 'waterfall' : 'carousel';
+  container.columns = clampWaterfallColumns(container.columns);
+  container.render = container.render === 'shortest' ? 'shortest' : 'z';
   if (!CONTAINER_DIRECTIONS.some((option) => option.value === container.direction)) {
     container.direction = 'left';
   }
@@ -1459,15 +1540,37 @@ function syncContainerIntervalVisibility(editor) {
   editor.els.containerIntervalField.hidden = editor.els.containerTrigger.value !== 'auto';
 }
 
+/** 轮播 / 瀑布两组设置二选一显示。 */
+function syncContainerModeVisibility(editor) {
+  const waterfall = editor.els.containerMode.value === 'waterfall';
+  editor.els.containerCarouselSettings.hidden = waterfall;
+  editor.els.containerWaterfallSettings.hidden = !waterfall;
+}
+
+/** 子盒子面板的父容器是不是瀑布（决定要不要显示尺寸模版）。 */
+function parentIsWaterfall(editor) {
+  const parent = editor?.nested ? editor.parentEditor?.cell : null;
+  return Boolean(parent && parent.type === 'container' && parent.container?.mode === 'waterfall');
+}
+
+/** 瀑布父容器的列数；不是瀑布时返回 0。 */
+function parentWaterfallColumns(editor) {
+  if (!parentIsWaterfall(editor)) return 0;
+  return clampWaterfallColumns(editor.parentEditor.cell.container.columns);
+}
+
 /** 把容器配置填进表单（只在主面板、且类型是容器时调用）。 */
 function fillContainerForm(editor, cell) {
   const container = ensureContainer(cell);
   if (!container) return;
   const { els } = editor;
   els.containerMode.value = container.mode;
+  els.containerColumns.value = String(container.columns);
+  els.containerRender.value = container.render;
   els.containerDirection.value = container.direction;
   els.containerTrigger.value = container.autoplay ? 'auto' : 'manual';
   els.containerInterval.value = container.interval;
+  syncContainerModeVisibility(editor);
   syncContainerIntervalVisibility(editor);
   renderContainerItems(editor);
 }
@@ -1488,6 +1591,8 @@ function renderContainerItems(editor) {
     list.append(empty);
     return;
   }
+  const waterfall = cell?.container?.mode === 'waterfall';
+  const columns = clampWaterfallColumns(cell?.container?.columns);
   items.forEach((item, index) => {
     const row = document.createElement('li');
     row.className = 'file-row container-row';
@@ -1503,7 +1608,9 @@ function renderContainerItems(editor) {
     name.textContent = cellTitle(item);
     const meta = document.createElement('span');
     meta.className = 'file-row__meta';
-    meta.textContent = `${index + 1} · ${CELL_TYPE_LABELS[item.type] || '图片'}`;
+    const units = effectiveUnits(item, columns);
+    const sizeLabel = waterfall ? `${units.w}×${units.h} · ` : '';
+    meta.textContent = `${index + 1} · ${sizeLabel}${CELL_TYPE_LABELS[item.type] || '图片'}`;
     open.append(name, meta);
 
     const del = document.createElement('button');
@@ -1674,7 +1781,8 @@ function addImportedItem(editor, raw) {
     ...source,
     id: undefined,
     pos: undefined,
-    size: '1x1',
+    // 保留仓库盒子原来的尺寸模版（瀑布会用它；轮播会忽略）；childCell 会校验
+    size: source.size || '1x1',
     type: ['image', 'solid', 'html'].includes(source.type) ? source.type : 'image',
     overlay: { ...defaultOverlay(), ...(source.overlay || {}) },
     fullscreen: { ...defaultFullscreen(), ...(source.fullscreen || {}) },

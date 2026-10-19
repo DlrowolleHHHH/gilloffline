@@ -321,6 +321,74 @@
   }
 }
 
+/* ------------------------------------------------------------- waterfall */
+
+/*
+ * 瀑布容器：内部是一块可以滚动的虚拟棋盘。子盒子的位置 / 尺寸由 shared.js
+ * 在 layout() 里算好写成 absolute 的 left/top/width/height；这里只管滚动和观感。
+ */
+.waterfall {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  /* 到边界时把滚动交还给页面（默认行为），别把整页滚动卡在容器里 */
+  overscroll-behavior: auto;
+  /* 预留纵向滚动条的位置，避免「出现滚动条 → 宽度变化 → 重新排 → 滚动条消失」抖动 */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-dim) 45%, transparent) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.waterfall::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.waterfall::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.waterfall::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-dim) 40%, transparent);
+}
+
+.waterfall::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-dim) 60%, transparent);
+}
+
+.waterfall__board {
+  position: relative;
+}
+
+.waterfall__item {
+  position: absolute;
+  overflow: hidden;
+}
+
+.waterfall__item > .cell {
+  position: absolute;
+  inset: 0;
+}
+
+/* 和轮播一样：内部子格子不跟着全局 hover 抬升，免得瀑布里上下跳 */
+.cell--container .waterfall__item .cell:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.waterfall__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  text-align: center;
+}
+
 .cell__media {
   position: absolute;
   inset: 0;

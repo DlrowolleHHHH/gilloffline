@@ -784,6 +784,13 @@
   gap: 8px;
 }
 
+/* 容器模式自己的那组设置（轮播 / 瀑布二选一显示） */
+.container-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .fieldset {
   display: flex;
   flex-direction: column;

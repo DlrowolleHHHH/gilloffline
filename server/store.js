@@ -39,6 +39,26 @@ const SEED_ASSETS_DIR = path.join(ROOT, 'assets');
 /* ------------------------------------------------------------------ limits */
 
 const SIZES = ['1x1', '2x2', '3x3', '4x4', '1x2', '1x4', '2x4', '3x6', '4x8'];
+/** 瀑布子盒子的尺寸键（宽 1..3、高 1..4）—— 镜像 web/js/shared.js 的 WATERFALL_SIZES。 */
+const WATERFALL_SIZES = ['1x1', '2x1', '3x1', '4x1', '1x2', '2x2', '3x2', '4x2', '1x3', '2x3', '3x3', '4x3'];
+/** 子盒子尺寸白名单：普通尺寸 + 瀑布尺寸。 */
+const NESTED_SIZES = [...new Set([...SIZES, ...WATERFALL_SIZES])];
+/** 瀑布尺寸的占格数（键是「行×列」）。 */
+const WATERFALL_SIZE_UNITS = {
+  '1x1': { w: 1, h: 1 },
+  '2x1': { w: 1, h: 2 },
+  '3x1': { w: 1, h: 3 },
+  '4x1': { w: 1, h: 4 },
+  '1x2': { w: 2, h: 1 },
+  '2x2': { w: 2, h: 2 },
+  '3x2': { w: 2, h: 3 },
+  '4x2': { w: 2, h: 4 },
+  '1x3': { w: 3, h: 1 },
+  '2x3': { w: 3, h: 2 },
+  '3x3': { w: 3, h: 3 },
+  '4x3': { w: 3, h: 4 },
+};
+
 /** The units each named size spans — mirrors `SIZES` in web/js/shared.js. */
 const SIZE_UNITS = {
   '1x1': { w: 1, h: 1 },
@@ -51,15 +71,37 @@ const SIZE_UNITS = {
   '3x6': { w: 6, h: 3 },
   '4x8': { w: 8, h: 4 },
 };
+
+/**
+ * 把子盒子的尺寸键换算成「宽度已经裁到 columns」的瀑布尺寸键。
+ * 例如 4x4（宽4高4）在 2 列容器里会存成 4x2（宽2高4）；
+ * 这样数据里记的就是实际占格，下次打开尺寸选择器也能正确高亮。
+ */
+function waterfallSizeKey(size, columns) {
+  const units = SIZE_UNITS[size] || WATERFALL_SIZE_UNITS[size] || SIZE_UNITS['1x1'];
+  const w = Math.max(1, Math.min(units.w, columns));
+  const h = Math.max(1, units.h);
+  for (const [key, value] of Object.entries(WATERFALL_SIZE_UNITS)) {
+    if (value.w === w && value.h === h) return key;
+  }
+  return '1x1';
+}
+
 const DIRECTIONS = ['left', 'right', 'top', 'bottom'];
 const RATIOS = ['1/1', '1/2'];
 const TYPES = ['image', 'solid', 'html', 'container'];
 /** 容器里能放的类型：容器不能嵌套（子盒子不可以是容器）。 */
 const CHILD_TYPES = ['image', 'solid', 'html'];
-/** 容器的呈现模式。目前只有轮播，留一个列表给以后的模式。 */
-const CONTAINER_MODES = ['carousel'];
+/** 容器的呈现模式：轮播 / 瀑布。 */
+const CONTAINER_MODES = ['carousel', 'waterfall'];
+/** 瀑布的排布方式：Z 字（行优先找第一个空位）/ 最短列（每次放当前最矮的一列）。 */
+const CONTAINER_RENDERS = ['z', 'shortest'];
 /** 轮播方向 = 内容移动的方向。和悬浮详情的 DIRECTIONS 是两套词。 */
 const CONTAINER_DIRECTIONS = ['left', 'right', 'up', 'down'];
+/** 瀑布的列数和默认值（客户端也有一份，必须同步）。 */
+const MIN_CONTAINER_COLUMNS = 1;
+const MAX_CONTAINER_COLUMNS = 3;
+const DEFAULT_CONTAINER_COLUMNS = 2;
 /** 格子的点击用哪个：跳转链接，还是全屏展开嵌入的页面（两者互斥，但两个地址都留着）。 */
 const CLICK_MODES = ['link', 'embed'];
 const FITS = ['cover', 'contain'];
@@ -230,22 +272,33 @@ const sizeUnits = (cell) => SIZE_UNITS[cell.size] || SIZE_UNITS['1x1'];
  */
 function normalizeContainer(raw) {
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const mode = oneOf(src.mode, CONTAINER_MODES, 'carousel');
+  const columns = safeNumber(
+    src.columns,
+    MIN_CONTAINER_COLUMNS,
+    MAX_CONTAINER_COLUMNS,
+    DEFAULT_CONTAINER_COLUMNS
+  );
   const items = [];
   if (Array.isArray(src.items)) {
     for (const item of src.items) {
       if (items.length >= MAX_CONTAINER_ITEMS) break;
       if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
       if (item.type === 'container') continue; // 容器不能嵌套
-      const child = normalizeCell(item, { nested: true });
+      // nestedSize：轮播会忽略它，瀑布用「宽度裁到列数、高度按模版」来排；
+      // 保留尺寸也让轮播 / 瀑布来回切换时不丢子盒子的高矮设置。
+      const child = normalizeCell(item, { nested: true, nestedSize: true });
       delete child.id;
       delete child.pos;
-      child.size = '1x1';
+      // 瀑布直接把宽度裁到当前列数并落到对应的尺寸键上（4x4 + 2 列 → 4x2）；
+      // 轮播保留原模版（渲染时不用，切回瀑布还能继续用）。
+      if (mode === 'waterfall') child.size = waterfallSizeKey(child.size, columns);
       items.push(child);
     }
   }
   return {
-    mode: oneOf(src.mode, CONTAINER_MODES, 'carousel'),
-    // 内容移动方向：left = 当前张向左退出、下一张从右侧进入
+    mode,
+    // 内容移动方向：left = 当前张向左退出、下一张从右侧进入（轮播用）
     direction: oneOf(src.direction, CONTAINER_DIRECTIONS, 'left'),
     autoplay: typeof src.autoplay === 'boolean' ? src.autoplay : true,
     interval: safeNumber(
@@ -254,11 +307,14 @@ function normalizeContainer(raw) {
       MAX_CONTAINER_INTERVAL,
       DEFAULT_CONTAINER_INTERVAL
     ),
+    // 瀑布用：列数 1..3，排布方式 z / shortest
+    columns,
+    render: oneOf(src.render, CONTAINER_RENDERS, 'z'),
     items,
   };
 }
 
-function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS, nested = false } = {}) {
+function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS, nested = false, nestedSize = false } = {}) {
   const src0 = raw && typeof raw === 'object' ? raw : {};
   // 过渡：早先试过一版「封面模式」（htmlCover 布尔，页面藏在封面后面）。
   // 现在「封面」和「嵌入的页面」是两个字段，那一版的意思就是「网页当嵌入的页面、
@@ -270,8 +326,9 @@ function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS, nested = fals
   const cell = {
     id: typeof src.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(src.id) ? src.id : newId(),
     type,
-    // 子盒子的尺寸由容器决定；这里只留一个中性占位值
-    size: nested ? '1x1' : oneOf(src.size, SIZES, '1x1'),
+    // 轮播子盒子由容器决定尺寸（1x1 只是占位）；瀑布子盒子保留尺寸模版，
+    // 宽度渲染时裁到容器列数、高度原样使用。
+    size: nested ? (nestedSize ? oneOf(src.size, NESTED_SIZES, '1x1') : '1x1') : oneOf(src.size, SIZES, '1x1'),
     borderColor: safeColorOrNone(src.borderColor, '#7e46b9'),
     borderWidth: safeNumber(src.borderWidth, 0, 20, 2),
     radius: safeNumber(src.radius, 0, 64, 14),
@@ -532,12 +589,17 @@ module.exports = {
   SITE_FILE,
   MAX_UPLOAD_BYTES,
   SIZES,
+  WATERFALL_SIZES,
   DIRECTIONS,
   RATIOS,
   TYPES,
   CHILD_TYPES,
   CONTAINER_MODES,
+  CONTAINER_RENDERS,
   CONTAINER_DIRECTIONS,
+  MIN_CONTAINER_COLUMNS,
+  MAX_CONTAINER_COLUMNS,
+  DEFAULT_CONTAINER_COLUMNS,
   MAX_CONTAINER_ITEMS,
   MIN_CONTAINER_INTERVAL,
   MAX_CONTAINER_INTERVAL,

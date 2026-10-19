@@ -327,6 +327,7 @@
           <div class="field" id="field-sizes">
             <label>尺寸</label>
             <div class="size-picker" id="ed-sizes"></div>
+            <p class="hint" id="sizes-hint" hidden></p>
           </div>
           <div class="grid-2">
             <div class="field">
@@ -420,24 +421,43 @@
             <label for="ed-container-mode">模式</label>
             <select class="input" id="ed-container-mode">
               <option value="carousel">轮播</option>
+              <option value="waterfall">瀑布</option>
             </select>
           </div>
-          <div class="grid-2">
-            <div class="field">
-              <label for="ed-container-direction">轮播方向</label>
-              <select class="input" id="ed-container-direction"></select>
+          <div class="container-settings" id="container-carousel-settings">
+            <div class="grid-2">
+              <div class="field">
+                <label for="ed-container-direction">轮播方向</label>
+                <select class="input" id="ed-container-direction"></select>
+              </div>
+              <div class="field">
+                <label for="ed-container-trigger">触发方式</label>
+                <select class="input" id="ed-container-trigger">
+                  <option value="auto">定时自动</option>
+                  <option value="manual">手动切换</option>
+                </select>
+              </div>
             </div>
-            <div class="field">
-              <label for="ed-container-trigger">触发方式</label>
-              <select class="input" id="ed-container-trigger">
-                <option value="auto">定时自动</option>
-                <option value="manual">手动切换</option>
-              </select>
+            <div class="field" id="field-container-interval">
+              <label for="ed-container-interval">自动切换间隔（秒，2–60）</label>
+              <input class="input" id="ed-container-interval" type="number" min="2" max="60" step="1" />
             </div>
           </div>
-          <div class="field" id="field-container-interval">
-            <label for="ed-container-interval">自动切换间隔（秒，2–60）</label>
-            <input class="input" id="ed-container-interval" type="number" min="2" max="60" step="1" />
+          <div class="container-settings" id="container-waterfall-settings" hidden>
+            <div class="grid-2">
+              <div class="field">
+                <label for="ed-container-columns">列数</label>
+                <select class="input" id="ed-container-columns"></select>
+              </div>
+              <div class="field">
+                <label for="ed-container-render">渲染模式</label>
+                <select class="input" id="ed-container-render"></select>
+              </div>
+            </div>
+            <p class="hint">
+              子盒子按尺寸模版占格：宽度最多到容器列数，高度照模版；超出容器高度时里层纵向滚动。
+              列数大于 1 时，内部一格至少 32px，容器太窄会横向滚动。
+            </p>
           </div>
           <div class="field">
             <label>容器里的盒子</label>
@@ -447,8 +467,8 @@
               <button class="btn btn--ghost" id="btn-container-import" type="button">从仓库导入</button>
             </div>
             <p class="hint">
-              子盒子与容器同尺寸；点列表里的盒子（或棋盘上的子盒子）打开它的编辑面板。
-              容器盒子不能放进容器里。
+              轮播时子盒子与容器同尺寸；瀑布时按尺寸模版占格，宽度裁到容器列数。
+              点列表里的盒子（或棋盘上的子盒子）打开它的编辑面板。容器盒子不能放进容器里。
             </p>
           </div>
         </fieldset>
