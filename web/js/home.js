@@ -298,9 +298,8 @@ let sharing = false;
 let shareCell = null;
 
 /**
- * 分享按钮只在「有分享权限 + 正在看自己的站」时露出来：
- * 站主的站判 subject === 'admin'，子管理员的站判 subject === ?userid=。
- * 权限由站主在管理页里分配。
+ * 分享按钮只给「有分享权限的子管理员」看，而且只在他自己的站上
+ * （subject === ?userid=）。站主的页面就是首页，不显示这个按钮 —— 他不需要分享。
  */
 async function setupShare() {
   let session;
@@ -310,7 +309,7 @@ async function setupShare() {
     return; // 连不上就当作没有权限，不显示
   }
   const owner = currentUserid();
-  const own = owner ? session.subject === owner : session.subject === 'admin';
+  const own = owner !== '' && session.subject === owner;
   if (!session.canShare || !own) return;
   shareEntry.hidden = false;
 }

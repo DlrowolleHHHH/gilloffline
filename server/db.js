@@ -45,6 +45,19 @@ const SCHEMA = `
     note       TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL
   );
+
+  -- 盒子仓库：全局共享的盒子清单，按 label 归类。cell 是整颗格子的 JSON。
+  CREATE TABLE IF NOT EXISTS boxes (
+    id          TEXT PRIMARY KEY,
+    label       TEXT NOT NULL,
+    info        TEXT NOT NULL DEFAULT '',
+    sharer      TEXT NOT NULL,
+    sharer_name TEXT NOT NULL DEFAULT '',
+    created_at  INTEGER NOT NULL,
+    cell        TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS boxes_label ON boxes (label);
+  CREATE INDEX IF NOT EXISTS boxes_created ON boxes (created_at DESC);
 `;
 
 let db = null;

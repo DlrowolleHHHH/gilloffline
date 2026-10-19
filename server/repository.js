@@ -7,8 +7,10 @@
  * 外加标签 label、可选描述 info、分享者和时间。**按 label 归类**：一个 label 对应
  * 多个盒子，仓库不单独维护「标签表」，归类是读的时候现分的。
  *
- * 存在数据目录下的 repository.json，和站点数据一起走；写入走临时文件 + rename，
- * 和 site.json 一样不会写出半个文件。
+ * 存在账号库（gilloffline.db）的 `boxes` 表里，而不是一个 JSON 文件：仓库会被反复
+ * 读、按 label 分组、按时间排序，这些都有索引；盒子多起来也不用整份读进内存。
+ * 早先那一版用过 `repository.json`：第一次打开时如果发现这个文件，会把它导进表里，
+ * 再把文件改名成 `.imported` 留作备份。
  */
 
 const fs = require('fs');
@@ -16,8 +18,9 @@ const path = require('path');
 const crypto = require('crypto');
 
 const store = require('./store');
+const db = require('./db');
 
-const FILE = path.join(store.DATA_DIR, 'repository.json');
+const LEGACY_FILE = path.join(store.DATA_DIR, 'repository.json');
 
 /** 上限都是防跑飞的：标签 1–40 字，描述最多 400 字，仓库最多 1000 个盒子。 */
 const MAX_LABEL = 40;
@@ -29,17 +32,70 @@ const fail = (message, status = 400) => Object.assign(new Error(message), { stat
 
 const clampText = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
 
-function readDoc() {
+/** 表里的一行 → 盒子对象（cell 是 JSON 文本）。坏数据不让它把整个仓库带崩。 */
+function toBox(row) {
+  if (!row) return undefined;
+  let cell = {};
   try {
-    const parsed = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-    return { boxes: Array.isArray(parsed.boxes) ? parsed.boxes : [] };
+    cell = JSON.parse(row.cell);
   } catch {
-    return { boxes: [] };
+    cell = {};
+  }
+  return {
+    id: row.id,
+    label: row.label,
+    info: row.info,
+    sharer: row.sharer,
+    sharerName: row.sharer_name,
+    createdAt: row.created_at,
+    cell,
+  };
+}
+
+/* ---------------------------------------------------------------- 旧文件迁移 */
+
+let ready = false;
+
+/** The pre-SQLite repository, imported once and then renamed like the other legacy files. */
+function importLegacy() {
+  if (ready) return;
+  ready = true;
+  if (!fs.existsSync(LEGACY_FILE)) return;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(LEGACY_FILE, 'utf8'));
+    const boxes = Array.isArray(parsed.boxes) ? parsed.boxes : [];
+    const insert = db.sql(
+      `INSERT OR IGNORE INTO boxes (id, label, info, sharer, sharer_name, created_at, cell)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const box of boxes) {
+      if (!box || typeof box.id !== 'string') continue;
+      insert.run(
+        box.id,
+        clampText(box.label, MAX_LABEL) || '未命名',
+        clampText(box.info, MAX_INFO),
+        String(box.sharer || 'admin'),
+        clampText(box.sharerName, MAX_NAME) || '匿名',
+        Number(box.createdAt) || Date.now(),
+        JSON.stringify(box.cell || {})
+      );
+    }
+    fs.renameSync(LEGACY_FILE, `${LEGACY_FILE}.imported`);
+    console.log('[repository] imported %d box(es) from repository.json', boxes.length);
+  } catch (err) {
+    console.warn('[repository] could not import repository.json (%s)', err.message);
   }
 }
 
+/* -------------------------------------------------------------------- 读写 */
+
 /** Newest first — the share dialog picks labels off the top, the admin list too. */
-const list = () => readDoc().boxes.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+function list() {
+  importLegacy();
+  return db.sql('SELECT * FROM boxes ORDER BY created_at DESC').all().map(toBox);
+}
+
+const findRow = (id) => db.sql('SELECT * FROM boxes WHERE id = ?').get(id);
 
 /**
  * 分享进来的格子先过一遍站点的清洗：越界的尺寸、写坏的颜色、坏 URL 都在这里
@@ -53,8 +109,9 @@ function normalizeCell(raw) {
 }
 
 function add({ label, info, cell, sharer, sharerName }) {
-  const doc = readDoc();
-  if (doc.boxes.length >= MAX_BOXES) throw fail('盒子仓库满了，先清理一些再分享。', 409);
+  importLegacy();
+  const count = db.sql('SELECT COUNT(*) AS total FROM boxes').get().total;
+  if (count >= MAX_BOXES) throw fail('盒子仓库满了，先清理一些再分享。', 409);
   const name = clampText(label, MAX_LABEL);
   if (!name) throw fail('标签不能为空。');
 
@@ -67,8 +124,10 @@ function add({ label, info, cell, sharer, sharerName }) {
     createdAt: Date.now(),
     cell: normalizeCell(cell),
   };
-  doc.boxes.push(box);
-  store.writeJsonAtomic(FILE, doc);
+  db.sql(
+    `INSERT INTO boxes (id, label, info, sharer, sharer_name, created_at, cell)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(box.id, box.label, box.info, box.sharer, box.sharerName, box.createdAt, JSON.stringify(box.cell));
   return box;
 }
 
@@ -76,32 +135,27 @@ const canTouch = (box, actor) => actor === 'admin' || box.sharer === actor;
 
 /** 改标签 / 描述：分享者本人或站主。 */
 function update(id, patch, actor) {
-  const doc = readDoc();
-  const box = doc.boxes.find((item) => item.id === id);
+  importLegacy();
+  const box = toBox(findRow(id));
   if (!box) throw fail('没有这个盒子。', 404);
   if (!canTouch(box, actor)) throw fail('只能改自己分享的盒子。', 403);
 
-  if (patch.label !== undefined) {
-    const label = clampText(patch.label, MAX_LABEL);
-    if (!label) throw fail('标签不能为空。');
-    box.label = label;
-  }
-  if (patch.info !== undefined) box.info = clampText(patch.info, MAX_INFO);
+  const label = patch.label !== undefined ? clampText(patch.label, MAX_LABEL) : box.label;
+  if (!label) throw fail('标签不能为空。');
+  const info = patch.info !== undefined ? clampText(patch.info, MAX_INFO) : box.info;
 
-  store.writeJsonAtomic(FILE, doc);
-  return box;
+  db.sql('UPDATE boxes SET label = ?, info = ? WHERE id = ?').run(label, info, id);
+  return { ...box, label, info };
 }
 
 /** 删一个盒子：分享者本人或站主。 */
 function remove(id, actor) {
-  const doc = readDoc();
-  const index = doc.boxes.findIndex((item) => item.id === id);
-  if (index < 0) throw fail('没有这个盒子。', 404);
-  const box = doc.boxes[index];
+  importLegacy();
+  const box = toBox(findRow(id));
+  if (!box) throw fail('没有这个盒子。', 404);
   if (!canTouch(box, actor)) throw fail('只能删自己分享的盒子。', 403);
-  doc.boxes.splice(index, 1);
-  store.writeJsonAtomic(FILE, doc);
+  db.sql('DELETE FROM boxes WHERE id = ?').run(id);
   return box;
 }
 
-module.exports = { FILE, MAX_LABEL, MAX_INFO, list, add, update, remove };
+module.exports = { MAX_LABEL, MAX_INFO, list, add, update, remove };
