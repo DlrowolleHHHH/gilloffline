@@ -14,8 +14,8 @@
 | `server/store.js` | 数据模型、清洗（sanitize）、**不重叠修复**（保存时的最后防线） |
 | `web/js/shared.js` | 几何与布局核心：`applyGridLayout`、`packBoard`、`repairBoard`、`firstFreeSpot`、碰撞判断 |
 | `web/js/board.js` | 棋盘的交互与渲染：拖拽手势、网格吸附、ghost 预览、行数增长 |
-| `web/js/admin.js` | 管理页把两者接起来：工具条（列数/间隔/缩放）、抽屉（含**自绘取色面板**：SV 区 + 色相/透明度条 + HEX/RGB/HSV + 吸管）、脏标记 |
-| `web/js/home.js` | 主页：套用 `site` 设置（强调色、间隔、布局）并渲染；子管理员的站（`?userid=…`）还会亮出右上角那个 `#admin-entry`（`position: fixed` + `z-index: 40`，**故意压在**全屏嵌入 80/81 和提示条 60 下面）。**盒子共享**也在这里：分享按钮 / 选盒子模式 / 分享窗口（`setupShare`、`setSharing`、`openShareDialog`） |
+| `web/js/admin.js` | 管理页把两者接起来：工具条（列数/间隔/缩放）、抽屉（含**自绘取色面板**：SV 区 + 色相/透明度条 + HEX/RGB/HSV + 吸管）、脏标记；身份胶囊、**盒子分享**（选盒子模式 + 分享窗口）、「我分享的盒子」/「盒子仓库」面板 |
+| `web/js/home.js` | 主页：套用 `site` 设置（强调色、间隔、布局）并渲染；子管理员的站（`?userid=…`）还会亮出右上角那个 `#admin-entry`（`position: fixed` + `z-index: 40`，**故意压在**全屏嵌入 80/81 和提示条 60 下面） |
 | `server/repository.js` | 盒子仓库：全局共享的盒子清单（SQLite `boxes` 表，按 label / created_at 建了索引），按 label 归类；入仓前过 `store.normalizeCell` 清洗；旧版 `repository.json` 首次访问时导入并改名 |
 | `web/css/admin.css` | `.admin-board`（棋盘容器）与 `.admin-board::before`（格线） |
 | `data/site.json` | 提交进仓库的种子数据，运行时只读（首次部署时复制到数据目录） |

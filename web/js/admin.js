@@ -265,7 +265,10 @@ const board = createBoard({
   onEdit: (id) => openDrawerUnlessCurrent(id, { withSizes: true }),
   onDuplicate: (id) => duplicateCell(id),
   onRemove: (id) => removeCell(id),
-  onSelect: (id) => openDrawerUnlessCurrent(id, { withSizes: true }),
+  onSelect: (id) => {
+    if (sharing) return openShareDialog(id); // 选盒子模式：点格子是挑它去分享
+    openDrawerUnlessCurrent(id, { withSizes: true });
+  },
   // a move or a resize has already patched its own slot, so there is nothing to
   // re-render here — just remember that the document is unsaved
   onChange: () => markDirty(),
@@ -1936,6 +1939,214 @@ async function onRepoAction(event) {
   }
 }
 
+/* ------------------------------------------------------------ 身份 / 分享 */
+
+/** 顶栏那颗身份胶囊：现在是以谁的身份在编辑。 */
+async function renderIdentity(session) {
+  const chip = $('identity-chip');
+  if (session.subject === 'admin') {
+    if (!isOwnerPage) {
+      // 代管：把对方的用户名找出来（只有站主列得动用户）
+      let name = `${userid.slice(0, 8)}…`;
+      try {
+        const data = await api('/api/users');
+        const user = (data.users || []).find((item) => item.userid === userid);
+        if (user) name = user.username;
+      } catch {
+        /* 拿不到就用 userid 的前几位 */
+      }
+      chip.textContent = `站主 · 代管 ${name}`;
+    } else {
+      chip.textContent = '以 站主 身份';
+    }
+  } else {
+    chip.textContent = `以 ${session.username || '用户'} 身份`;
+  }
+  chip.hidden = false;
+}
+
+/**
+ * 登录后按「登录的是谁」决定分享按钮和两个面板（不是按打开的是谁的页面）：
+ * · 站主：管理盒子仓库（任何页面上都是），不分享；
+ * · 子管理员：分享按钮（有权限才有）+「我分享的盒子」，看不到盒子仓库。
+ */
+function setupAccount(session) {
+  const isAdmin = session.subject === 'admin';
+  shareButton.hidden = !(session.canShare && !isAdmin);
+  $('repo-panel').hidden = !isAdmin;
+  $('my-shares-panel').hidden = isAdmin;
+  renderIdentity(session);
+}
+
+/** 正在「选盒子」模式：这时点格子是挑它去分享，不是打开编辑。 */
+let sharing = false;
+let shareCellId = null;
+
+function setSharing(next) {
+  sharing = next;
+  document.body.classList.toggle('is-sharing', next);
+  shareHint.hidden = !next;
+  shareButton.setAttribute('aria-pressed', String(next));
+  shareButton.textContent = next ? '退出分享' : '分享盒子';
+  if (next) {
+    closeDrawer();
+    loadShareLabels();
+  } else {
+    closeShareDialog();
+  }
+}
+
+/** 标签候选：自己分享过的盒子用过的那些（盒子仓库本身不给子管理员看）。 */
+async function loadShareLabels() {
+  try {
+    const data = await api('/api/repository?mine=1');
+    const labels = [...new Set((data.boxes || []).map((box) => box.label).filter(Boolean))];
+    shareLabels.replaceChildren(
+      ...labels.map((label) => {
+        const option = document.createElement('option');
+        option.value = label;
+        return option;
+      })
+    );
+  } catch {
+    /* 没有候选也没关系，标签本来就随手填 */
+  }
+}
+
+function showShareError(message) {
+  shareError.textContent = message;
+  shareError.hidden = !message;
+}
+
+function openShareDialog(id) {
+  const cell = state.doc.cells.find((item) => item.id === id);
+  if (!cell) return;
+  shareCellId = id;
+  shareLabel.value = '';
+  shareInfo.value = '';
+  showShareError('');
+  shareTarget.textContent = cell.imageTitle ? `「${cell.imageTitle}」` : '这个盒子';
+  shareDialog.hidden = false;
+  requestAnimationFrame(() => shareLabel.focus());
+}
+
+function closeShareDialog() {
+  shareDialog.hidden = true;
+  shareCellId = null;
+}
+
+async function submitShare() {
+  const cell = state.doc.cells.find((item) => item.id === shareCellId);
+  if (!cell) return;
+  const label = shareLabel.value.trim();
+  if (!label) {
+    showShareError('标签不能为空。');
+    shareLabel.focus();
+    return;
+  }
+  shareSubmit.disabled = true;
+  try {
+    await api('/api/repository', { method: 'POST', body: { label, info: shareInfo.value.trim(), cell } });
+    closeShareDialog();
+    toast('已分享到盒子仓库', 'ok');
+    refreshMyShares();
+  } catch (err) {
+    showShareError(err.message);
+  } finally {
+    shareSubmit.disabled = false;
+  }
+}
+
+/** 子管理员自己的分享列表（站主用「盒子仓库」面板，不看这个）。 */
+async function refreshMyShares() {
+  const list = $('my-share-list');
+  try {
+    const data = await api('/api/repository?mine=1');
+    const boxes = data.boxes || [];
+    if (!boxes.length) {
+      list.replaceChildren(repoEmpty('你还没有分享过盒子。'));
+      return;
+    }
+    list.replaceChildren(...boxes.map(myShareRow));
+  } catch (err) {
+    list.replaceChildren(repoEmpty(`加载失败：${err.message}`));
+  }
+}
+
+function myShareRow(box) {
+  const row = document.createElement('li');
+  row.className = 'file-row';
+
+  const cell = box.cell || {};
+  const name = document.createElement('span');
+  name.className = 'file-row__name';
+  name.textContent = cell.imageTitle || `${cell.size || '1x1'} · ${cell.type || 'image'}`;
+
+  const meta = document.createElement('span');
+  meta.className = 'file-row__meta';
+  meta.textContent = [box.label && `#${box.label}`, box.info, stampOf(box.createdAt)].filter(Boolean).join(' · ');
+
+  const actions = document.createElement('span');
+  actions.className = 'file-row__acts';
+  actions.append(actionButton('rm', '✕', '取消分享', box.id));
+
+  row.append(repoThumb(cell), name, meta, actions);
+  return row;
+}
+
+const shareButton = $('btn-share');
+const shareHint = $('share-hint');
+const shareDialog = $('share-dialog');
+const shareTarget = $('share-target');
+const shareLabel = $('share-label');
+const shareInfo = $('share-info');
+const shareLabels = $('share-labels');
+const shareError = $('share-error');
+const shareCancel = $('share-cancel');
+const shareSubmit = $('share-submit');
+
+function bindShare() {
+  shareButton.addEventListener('click', () => setSharing(!sharing));
+  shareCancel.addEventListener('click', closeShareDialog);
+  shareSubmit.addEventListener('click', submitShare);
+  shareDialog.addEventListener('click', (event) => {
+    if (event.target === shareDialog) closeShareDialog();
+  });
+  shareDialog.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey && event.target !== shareInfo) {
+      event.preventDefault();
+      submitShare();
+    }
+  });
+  $('my-shares-panel').addEventListener('toggle', () => {
+    if ($('my-shares-panel').open) refreshMyShares();
+  });
+  $('my-share-list').addEventListener('click', async (event) => {
+    const button = event.target.closest('button[data-act="rm"]');
+    if (!button) return;
+    if (!confirm('从盒子仓库撤掉这个分享？（你自己页面上的那颗不受影响）')) return;
+    try {
+      await api(`/api/repository/${encodeURIComponent(button.dataset.name)}`, { method: 'DELETE' });
+      toast('已取消分享', 'ok');
+      refreshMyShares();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!shareDialog.hidden) {
+      closeShareDialog();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (sharing) {
+      setSharing(false);
+      event.stopImmediatePropagation();
+    }
+  });
+}
+
 /* -------------------------------------------------------------- save/export */
 
 function markDirty() {
@@ -2089,6 +2300,7 @@ async function boot() {
   bindSitePanel();
   bindFiles();
   bindPeople();
+  bindShare();
 
   window.addEventListener('beforeunload', (event) => {
     if (!state.dirty) return undefined;
@@ -2110,7 +2322,10 @@ async function boot() {
     state.subject = session.subject;
     // the owner can open anyone's page; a sub-admin only their own
     const mine = session.subject === 'admin' || (userid !== '' && session.subject === userid);
-    if (mine) await start();
+    if (mine) {
+      await start();
+      setupAccount(session);
+    }
     else showLogin();
   } catch (err) {
     showLogin(`无法连接服务器：${err.message}`);

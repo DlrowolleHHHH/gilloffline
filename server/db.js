@@ -58,6 +58,7 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS boxes_label ON boxes (label);
   CREATE INDEX IF NOT EXISTS boxes_created ON boxes (created_at DESC);
+  CREATE INDEX IF NOT EXISTS boxes_sharer ON boxes (sharer);
 `;
 
 let db = null;

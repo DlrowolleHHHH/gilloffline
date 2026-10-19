@@ -1188,3 +1188,136 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------------------------------------------------------- 身份 / 分享 */
+
+/* 顶栏最左边：现在是以谁的身份在编辑 */
+.identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.identity::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* 选盒子模式：棋盘上每颗盒子都可以点，盖一层透明接收层，网页封面里的 iframe 也点得到 */
+body.is-sharing .admin-board .slot {
+  cursor: pointer;
+  outline: 1px dashed color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 2px;
+}
+
+body.is-sharing .admin-board .slot:hover {
+  outline-style: solid;
+}
+
+body.is-sharing .admin-board .slot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* 压在按钮条（5）和右下角手柄（6）上面 */
+  z-index: 7;
+  border-radius: inherit;
+}
+
+/* 我分享的盒子 */
+.my-share-row .file-row__meta {
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------ 分享窗口 */
+
+.share-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4, 3, 8, 0.62);
+  backdrop-filter: blur(4px);
+}
+
+.share-card {
+  width: min(430px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--ink-700);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.6);
+}
+
+.share-card h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.share-hint {
+  margin: -6px 0 0;
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+
+.share-field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+
+.share-field em {
+  margin-left: 4px;
+  color: var(--accent);
+  font-style: normal;
+}
+
+.share-field i {
+  margin-left: 4px;
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.share-input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ink-900);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.share-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.share-error {
+  margin: 0;
+  color: #ffb4b6;
+  font-size: 12.5px;
+}
+
+.share-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+

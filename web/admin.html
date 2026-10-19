@@ -18,8 +18,11 @@
         <span class="hint">管理页</span>
       </a>
       <div class="topbar-actions" id="topbar-actions" hidden>
+        <span class="identity" id="identity-chip" hidden></span>
         <span class="dirty-flag" id="dirty-flag" hidden>未保存</span>
         <button class="btn" id="btn-save" type="button" title="保存（⌘S / Ctrl+S）">保存</button>
+        <button class="btn btn--ghost" id="btn-share" type="button" aria-pressed="false" hidden
+                title="进入选盒子模式，点一颗盒子把它分享到盒子仓库">分享盒子</button>
         <a class="btn btn--ghost" id="link-preview" href="/" target="_blank" rel="noopener">预览主页</a>
         <a class="btn btn--ghost" id="link-editor" href="/editor">创作工具</a>
         <button class="btn btn--ghost" id="btn-export" type="button">导出</button>
@@ -202,9 +205,20 @@
           <div class="files">
             <p class="hint">
               所有拿到分享权限的用户都能把盒子推到这里，按标签归类（一个标签下可以有很多盒子）。
-              站主能改任何一个盒子的标签/描述，也能删掉它；子管理员只能动自己分享的。
+              站主能改任何一个盒子的标签/描述，也能删掉它。
             </p>
             <ul class="file-list" id="repo-list"></ul>
+          </div>
+        </details>
+
+        <details class="panel" id="my-shares-panel" hidden>
+          <summary>我分享的盒子</summary>
+          <div class="files">
+            <p class="hint">
+              你分享到盒子仓库的盒子都在这里；点 ✕ 就从仓库里撤掉（不影响你自己页面上的那颗）。
+              盒子仓库里都有什么，只有站主能看。
+            </p>
+            <ul class="file-list" id="my-share-list"></ul>
           </div>
         </details>
 
@@ -253,6 +267,7 @@
             </select>
           </label>
 
+          <span class="hint" id="share-hint" hidden>点一个格子把它分享到盒子仓库 · Esc 退出</span>
           <span class="hint" id="site-columns-hint" hidden></span>
           <span class="hint admin-toolbar__help">
             在空白处拖动画出格子 · 拖动格子换位置 · 拖右下角的小方块改尺寸 · 单击格子编辑内容
@@ -502,6 +517,30 @@
         <button class="btn btn--primary" id="ed-done" type="button">完成</button>
       </div>
     </aside>
+
+    <!-- 分享窗口：选一颗盒子之后填标签（必填）和描述（可选） -->
+    <div class="share-dialog" id="share-dialog" hidden>
+      <div class="share-card" role="dialog" aria-modal="true" aria-labelledby="share-title">
+        <h2 id="share-title">分享这个盒子</h2>
+        <p class="share-hint" id="share-target"></p>
+        <label class="share-field">
+          <span>标签 <em>必填</em></span>
+          <input class="share-input" id="share-label" type="text" maxlength="40" list="share-labels"
+                 spellcheck="false" placeholder="放哪个分类，比如「工具」「作品」" />
+        </label>
+        <datalist id="share-labels"></datalist>
+        <label class="share-field">
+          <span>描述 <i>可选</i></span>
+          <textarea class="share-input" id="share-info" rows="3" maxlength="400"
+                    placeholder="一句话说明这个盒子是做什么的"></textarea>
+        </label>
+        <p class="share-error" id="share-error" hidden></p>
+        <div class="share-actions">
+          <button class="btn btn--ghost" id="share-cancel" type="button">取消</button>
+          <button class="btn btn--primary" id="share-submit" type="button">分享</button>
+        </div>
+      </div>
+    </div>
 
     <!--
       取色面板：点色板弹出。系统原生的 <input type="color"> 是浏览器自己的窗口，

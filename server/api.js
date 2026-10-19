@@ -15,7 +15,7 @@
  *   DELETE /api/files?kind=x&name=y   delete a file
  *   GET|POST|DELETE /api/users    sub-admins (site owner only); PATCH sets canShare
  *   GET|POST|DELETE /api/invites  invite codes (site owner only)
- *   GET    /api/repository        the shared box repository (public)
+ *   GET    /api/repository        the shared box repository (public; ?mine=1 = your own)
  *   POST   /api/repository        share one of your cells (needs share permission)
  *   PATCH  /api/repository/:id    relabel / re-describe a box (its sharer or the owner)
  *   DELETE /api/repository/:id    remove a box (its sharer or the owner)
@@ -381,7 +381,15 @@ async function handle(req, res, url) {
   }
 
   if (pathname === '/api/repository') {
-    if (method === 'GET') return sendJson(res, 200, { boxes: repository.list() });
+    if (method === 'GET') {
+      // ?mine=1：只要自己分享的那些（子管理员的「我分享的盒子」面板）
+      if (url.searchParams.get('mine') === '1') {
+        const subject = auth.sessionSubject(req);
+        if (subject === null) return sendJson(res, 401, { error: '登录已失效，请重新登录。' });
+        return sendJson(res, 200, { boxes: repository.listBy(subject) });
+      }
+      return sendJson(res, 200, { boxes: repository.list() });
+    }
     if (method === 'POST') {
       const subject = auth.sessionSubject(req);
       if (subject === null) return sendJson(res, 401, { error: '登录已失效，请重新登录。' });

@@ -97,6 +97,12 @@ function list() {
 
 const findRow = (id) => db.sql('SELECT * FROM boxes WHERE id = ?').get(id);
 
+/** 某个分享者自己的盒子（「我分享的盒子」面板用）。 */
+function listBy(sharer) {
+  importLegacy();
+  return db.sql('SELECT * FROM boxes WHERE sharer = ? ORDER BY created_at DESC').all(sharer).map(toBox);
+}
+
 /**
  * 分享进来的格子先过一遍站点的清洗：越界的尺寸、写坏的颜色、坏 URL 都在这里
  * 退回默认值，仓库里不会存进一颗「站点存不下」的盒子。
@@ -158,4 +164,4 @@ function remove(id, actor) {
   return box;
 }
 
-module.exports = { MAX_LABEL, MAX_INFO, list, add, update, remove };
+module.exports = { MAX_LABEL, MAX_INFO, list, listBy, add, update, remove };

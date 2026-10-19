@@ -18,44 +18,12 @@
     </header>
 
     <!--
-      右上角常驻的一排入口：
-      · 分享：只有拿到分享权限、并且正在看「自己这个站」时才显示（站主 = 站主的站）。
-        点一下进入选盒子模式，再点任意盒子就能把它分享到盒子仓库。
-      · 管理页：子管理员自己的站才有；站主的站没有 ?userid=，不显示。
+      子管理员自己的站：右上角常驻一个回管理页的入口（便于随时回来改自己的页面）。
+      站主的站没有 ?userid=，这个按钮也就不显示 —— 他本来就有主图和格子里的入口。
+      分享盒子在管理页里做（顶栏的「分享盒子」）。
     -->
     <div class="page-tools">
-      <button class="page-tool" id="share-entry" type="button" aria-pressed="false" hidden>分享</button>
       <a class="page-tool" id="admin-entry" href="/admin" hidden>管理页</a>
-    </div>
-
-    <!-- 选盒子模式下的顶部提示条 -->
-    <div class="share-banner" id="share-banner" hidden role="status">
-      <span>选择盒子进行共享 · 按 <kbd>Esc</kbd> 退出</span>
-      <button class="share-banner__exit" id="share-exit" type="button">退出分享</button>
-    </div>
-
-    <!-- 分享窗口：填标签（必填）和描述（可选） -->
-    <div class="share-dialog" id="share-dialog" hidden>
-      <div class="share-card" role="dialog" aria-modal="true" aria-labelledby="share-title">
-        <h2 id="share-title">分享这个盒子</h2>
-        <p class="share-hint" id="share-target"></p>
-        <label class="share-field">
-          <span>标签 <em>必填</em></span>
-          <input class="share-input" id="share-label" type="text" maxlength="40" list="share-labels"
-                 spellcheck="false" placeholder="放哪个分类，比如「工具」「作品」" />
-        </label>
-        <datalist id="share-labels"></datalist>
-        <label class="share-field">
-          <span>描述 <i>可选</i></span>
-          <textarea class="share-input" id="share-info" rows="3" maxlength="400"
-                    placeholder="一句话说明这个盒子是做什么的"></textarea>
-        </label>
-        <p class="share-error" id="share-error" hidden></p>
-        <div class="share-actions">
-          <button class="btn btn--ghost" id="share-cancel" type="button">取消</button>
-          <button class="btn btn--primary" id="share-submit" type="button">分享</button>
-        </div>
-      </div>
     </div>
 
     <main class="wrap">
