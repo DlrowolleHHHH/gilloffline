@@ -315,8 +315,10 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 - **子面板预览**：轮播子盒子按父容器的 `w × h` 画（`cellUnits(parent)`）；
   瀑布子盒子按 `effectiveUnits(child, columns)` 画（宽度裁到列数、高度按模版）——
   绝不把子盒子原始尺寸里的宽度直接当成实际宽度。
-- **棋盘上的子盒子**：轮播的 slide / 瀑布的 `.waterfall__item` 和子 cell 都带 `data-child-index`，
-  `board.js` 的 click 分支命中它就走 `onChildEdit(容器 id, 下标)`，不再打开容器面板；
+- **棋盘上的子盒子**：只有**瀑布**的 `.waterfall__item` / 子 cell 带 `data-child-index`，
+  `board.js` 的 click 分支命中它就走 `onChildEdit(容器 id, 下标)`。
+  **轮播故意不挂这个属性**：轮播子盒子铺满整个容器，点到哪儿都是子盒子；如果按子盒子处理，
+  容器自己的编辑面板就永远打不开。轮播里编辑子盒子走容器面板里的列表。
   轮播箭头带 `data-no-drag`，`onPointerDown` 直接跳过。
 - **空容器 / 单个子盒子**：都安全；没有箭头、没有定时器。空容器分别显示
   `.carousel__empty` / `.waterfall__empty`。

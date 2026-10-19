@@ -347,14 +347,16 @@ function createCarousel(cell, { autoplay = true } = {}) {
   const slides = spec.items.map((item, index) => {
     const slide = document.createElement('div');
     slide.className = 'carousel__slide';
-    slide.dataset.childIndex = String(index);
     slide.setAttribute('role', 'group');
     slide.setAttribute('aria-roledescription', '幻灯片');
     slide.setAttribute('aria-label', `${index + 1} / ${spec.items.length}`);
-    // 子盒子没有 id：容器内用下标定位（编辑面板点开的就是这个下标）
+    /*
+     * 轮播子盒子故意**不挂** data-child-index：它铺满整个容器，棋盘上点到哪儿
+     * 都是子盒子。如果按子盒子处理，容器自己的编辑面板就永远打不开。轮播里要
+     * 编辑子盒子，走容器面板里的子盒子列表；瀑布有空隙、子盒子边界清楚，才在
+     * 棋盘上直接点子盒子打开它。
+     */
     const child = createCell(item, { autoplay: false });
-    child.dataset.carouselChild = '1';
-    child.dataset.childIndex = String(index);
     slide.append(child);
     viewport.append(slide);
     return slide;
@@ -579,7 +581,7 @@ function packWaterfallShortest(items, columns) {
  * 单列时 unit = 容器宽度。子盒子在格子里再留一圈 gap，看起来才是一块块分开的盒子。
  * 位置在渲染时现算，不写进数据。
  */
-function createWaterfall(node, spec) {
+function createWaterfall(spec) {
   const root = document.createElement('div');
   root.className = 'waterfall';
   root.dataset.render = spec.render;
@@ -690,7 +692,7 @@ export function createCell(cell, { autoplay = true } = {}) {
   if (isContainer) {
     const spec = containerSpec(cell);
     node.append(
-      spec.mode === 'waterfall' ? createWaterfall(node, spec) : createCarousel(cell, { autoplay })
+      spec.mode === 'waterfall' ? createWaterfall(spec) : createCarousel(cell, { autoplay })
     );
     return node;
   }
