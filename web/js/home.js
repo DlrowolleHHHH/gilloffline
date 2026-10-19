@@ -298,8 +298,10 @@ let sharing = false;
 let shareCell = null;
 
 /**
- * 分享按钮只给「有分享权限的子管理员」看，而且只在他自己的站上
- * （subject === ?userid=）。站主的页面就是首页，不显示这个按钮 —— 他不需要分享。
+ * 分享按钮给谁看：
+ *   · 有分享权限的子管理员 —— 只在他自己的站上（subject === ?userid=）；
+ *   · 站主 —— 在任何「子管理员的站」上都能分享（代管场景，也能顺手验证功能），
+ *     但**站主自己的首页**（没有 ?userid=）不显示 —— 他不需要分享。
  *
  * 权限是站主在管理页里随时可以改的，所以这里不只在页面加载时问一次：
  * 从 bfcache 恢复（pageshow）、或者切回这个标签页（visibilitychange）时都会重新问，
@@ -315,7 +317,8 @@ async function refreshSharePermission() {
   }
   const owner = currentUserid();
   const own = owner !== '' && session.subject === owner;
-  const allowed = Boolean(session.canShare) && own;
+  const managing = owner !== '' && session.subject === 'admin';
+  const allowed = Boolean(session.canShare) && (own || managing);
   shareEntry.hidden = !allowed;
   if (!allowed && sharing) setSharing(false);
 }
