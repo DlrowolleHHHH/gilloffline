@@ -497,6 +497,34 @@
                 </div>
               </div>
             </div>
+            <div class="field">
+              <label for="ed-backend-mode">应用后端（把这个页面做成应用）</label>
+              <select class="input" id="ed-backend-mode">
+                <option value="none">不挂后端</option>
+                <option value="remote">远程机器（IP:Port）</option>
+                <option value="inline">内置 JS（跑在页面里）</option>
+              </select>
+            </div>
+            <div class="field" id="field-backend-url" hidden>
+              <label for="ed-backend-url">后端地址</label>
+              <input class="input" id="ed-backend-url" type="text" maxlength="2048" spellcheck="false" placeholder="http://1.2.3.4:8080" />
+              <p class="hint">
+                应用页面会用 <code>vitsrv</code> 直接连这个地址（沙箱里 Origin 是 <code>null</code>），
+                后端要允许跨域：<code>Access-Control-Allow-Origin: *</code>。只支持 http / https；
+                站点是 HTTPS 时后端也必须是 HTTPS（浏览器会拦 Mixed Content）。
+              </p>
+            </div>
+            <div class="field" id="field-backend-code" hidden>
+              <label for="ed-backend-code">内置后端代码（JS）</label>
+              <textarea class="input" id="ed-backend-code" rows="9" maxlength="20000" spellcheck="false"></textarea>
+              <p class="hint">
+                整段代码要 <code>return</code> 一个处理函数，比如
+                <code>return async (req) =&gt; new Response('ok')</code>。拿到的是标准 <code>Request</code>
+                （<code>req.method</code>、<code>req.url</code>、<code>await req.json()</code>），
+                可以返回 <code>Response</code>、<code>{ status, body }</code>、普通对象或字符串。
+                这段代码和页面一样跑在盒子的沙箱里。
+              </p>
+            </div>
             <p class="hint">
               和封面是两回事：封面照旧是图片 / 纯色 / 网页，这里再嵌一个可以点开的页面（比如一个小工具）。
               填了之后，鼠标移到格子上时右下角会浮出放大角标，点格子或角标就<strong>全屏展开</strong>这个页面 ——
