@@ -1213,6 +1213,15 @@
   background: var(--accent);
 }
 
+/*
+ * 选盒子模式下，编辑相关的操作说明先收起来 —— 这会儿点格子是「挑它去分享」，
+ * 不是画格子 / 挪位置 / 改尺寸 / 打开编辑，留着那行只添乱。
+ */
+body.is-sharing .admin-toolbar__help,
+body.is-sharing .board-touch-hint {
+  display: none;
+}
+
 /* 选盒子模式：棋盘上每颗盒子都可以点，盖一层透明接收层，网页封面里的 iframe 也点得到 */
 body.is-sharing .admin-board .slot {
   cursor: pointer;
