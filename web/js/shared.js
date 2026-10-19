@@ -33,6 +33,22 @@ export const RATIOS = [
   { value: '1/2', label: '覆盖一半（1/2）' },
 ];
 
+/** 容器盒子的模式。目前只有轮播；列表留着给以后的模式。 */
+export const CONTAINER_MODES = [{ value: 'carousel', label: '轮播' }];
+
+/** 轮播方向 = 内容移动的方向（不是「从哪边进来」的悬浮详情 DIRECTIONS）。 */
+export const CONTAINER_DIRECTIONS = [
+  { value: 'left', label: '向左' },
+  { value: 'right', label: '向右' },
+  { value: 'up', label: '向上' },
+  { value: 'down', label: '向下' },
+];
+
+/** 自动轮播的间隔（秒）。上限 / 默认值必须和 server/store.js 同步。 */
+export const CONTAINER_INTERVAL = { min: 2, max: 60, fallback: 5 };
+/** 一个容器最多放多少个盒子 —— 镜像 server/store.js 的 MAX_CONTAINER_ITEMS。 */
+export const MAX_CONTAINER_ITEMS = 30;
+
 /** Unique id for a freshly created cell. */
 export function newId() {
   const bytes = crypto.getRandomValues(new Uint8Array(6));
@@ -78,6 +94,49 @@ export function defaultCell(overrides = {}) {
     fullscreen: defaultFullscreen(),
     ...overrides,
   };
+}
+
+/** 新建容器时的默认配置：轮播、向左、自动、5 秒、空列表。 */
+export function defaultContainer() {
+  return { mode: 'carousel', direction: 'left', autoplay: true, interval: CONTAINER_INTERVAL.fallback, items: [] };
+}
+
+/**
+ * 防御性读取一个容器的配置。导入的 JSON / 手写文档还没经过服务端清洗，
+ * 渲染层不能假设字段齐全；容器里的容器也在这里挡掉一层。
+ */
+export function containerSpec(cell) {
+  const raw = cell && cell.container && typeof cell.container === 'object' ? cell.container : {};
+  const items = Array.isArray(raw.items)
+    ? raw.items.filter((item) => item && typeof item === 'object' && item.type !== 'container')
+    : [];
+  const direction = CONTAINER_DIRECTIONS.some((option) => option.value === raw.direction)
+    ? raw.direction
+    : 'left';
+  const interval = Math.round(Number(raw.interval));
+  return {
+    mode: 'carousel',
+    direction,
+    autoplay: raw.autoplay !== false,
+    interval: Number.isFinite(interval)
+      ? Math.min(CONTAINER_INTERVAL.max, Math.max(CONTAINER_INTERVAL.min, interval))
+      : CONTAINER_INTERVAL.fallback,
+    items: items.slice(0, MAX_CONTAINER_ITEMS),
+  };
+}
+
+/**
+ * 容器里的子盒子：没有自己的 id / pos，size 只是中性占位 —— 渲染时永远铺满容器，
+ * 绝不拿它算尺寸。容器不能嵌套，这里也顺手把 type 兜回图片。
+ */
+export function childCell(overrides = {}) {
+  const cell = defaultCell(overrides);
+  delete cell.id;
+  delete cell.pos;
+  delete cell.container;
+  cell.size = '1x1';
+  if (cell.type === 'container') cell.type = 'image';
+  return cell;
 }
 
 /**
@@ -156,13 +215,272 @@ export function resolveLink(link) {
   return SITE_PAGES.includes(link) ? withUserid(link) : link;
 }
 
-export function createCell(cell) {
-  // 「跳转链接」和「嵌入的页面」互斥：两个地址都留着，由 clickMode 说哪个生效
-  const clickEmbed = cell.clickMode !== 'link' ? cell.embed || '' : '';
-  const clickLink = cell.clickMode === 'link' ? cell.link || '' : '';
+/* ------------------------------------------------------------- carousel */
+
+/** 一张幻灯片的过渡时长（和 showcase.css 里的 transition 一致）。 */
+const CAROUSEL_SLIDE_MS = 480;
+/** 轮播根节点 → 定时器的注册表：节点被替换后，下一拍自己退出。 */
+const liveCarousels = new Set();
+let carouselVisibilityBound = false;
+
+/** 一块屏幕上的所有轮播共用一个 visibilitychange 监听，别每个实例挂一个。 */
+function bindCarouselVisibility() {
+  if (carouselVisibilityBound) return;
+  carouselVisibilityBound = true;
+  document.addEventListener('visibilitychange', () => {
+    for (const sync of [...liveCarousels]) sync();
+  });
+}
+
+/** 内容移动方向 → 下一张从哪一侧进入。left/up 从正方向（右/下）进入。 */
+const CAROUSEL_AXIS = { left: 'X', right: 'X', up: 'Y', down: 'Y' };
+const CAROUSEL_ENTER_SIGN = { left: 1, right: -1, up: 1, down: -1 };
+
+function carouselTransform(direction, step) {
+  const axis = CAROUSEL_AXIS[direction] || 'X';
+  const sign = (CAROUSEL_ENTER_SIGN[direction] || 1) * (step > 0 ? 1 : -1);
+  return axis === 'X'
+    ? `translate3d(${sign * 100}%,0,0)`
+    : `translate3d(0,${sign * 100}%,0)`;
+}
+
+/**
+ * 轮播容器：幻灯片绝对叠放，切换时当前张按 direction 退出、下一张从反方向进入。
+ *
+ * 手动 = 两个箭头；自动 = 一个 setTimeout 链（不是 setInterval：每一拍都要重新判断
+ * 悬停 / 焦点 / 页面可见 / 节点是否还在文档里）。节点被 board.refresh 或预览重建替换后，
+ * 下一拍发现 isConnected 为 false，就把自己从注册表里摘掉。
+ */
+function createCarousel(cell, { autoplay = true } = {}) {
+  const spec = containerSpec(cell);
+  const root = document.createElement('div');
+  root.className = 'carousel';
+  root.dataset.direction = spec.direction;
+  root.setAttribute('role', 'group');
+  root.setAttribute('aria-roledescription', '轮播');
+
+  if (!spec.items.length) {
+    const empty = document.createElement('span');
+    empty.className = 'carousel__empty';
+    empty.textContent = '容器里还没有盒子';
+    root.append(empty);
+    return root;
+  }
+
+  const viewport = document.createElement('div');
+  viewport.className = 'carousel__viewport';
+  const slides = spec.items.map((item, index) => {
+    const slide = document.createElement('div');
+    slide.className = 'carousel__slide';
+    slide.dataset.childIndex = String(index);
+    slide.setAttribute('role', 'group');
+    slide.setAttribute('aria-roledescription', '幻灯片');
+    slide.setAttribute('aria-label', `${index + 1} / ${spec.items.length}`);
+    // 子盒子没有 id：容器内用下标定位（编辑面板点开的就是这个下标）
+    const child = createCell(item, { autoplay: false });
+    child.dataset.carouselChild = '1';
+    child.dataset.childIndex = String(index);
+    slide.append(child);
+    viewport.append(slide);
+    return slide;
+  });
+  root.append(viewport);
+
+  const count = document.createElement('span');
+  count.className = 'carousel__count';
+  count.hidden = slides.length < 2;
+  root.append(count);
+
+  let index = 0;
+  let transition = null;
+  let timer = null;
+  let hovered = false;
+  let focused = false;
+
+  const arrow = (kind, label) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `carousel__arrow carousel__arrow--${kind}`;
+    // 棋盘上的按下不该被当成拖动（board.js 会跳过 [data-no-drag]）
+    button.dataset.noDrag = '';
+    button.setAttribute('aria-label', label);
+    const glyph = document.createElement('span');
+    glyph.className = 'carousel__arrow-glyph';
+    glyph.textContent = kind === 'prev' ? '‹' : '›';
+    button.append(glyph);
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      go(kind === 'prev' ? -1 : 1);
+      syncTimer();
+    });
+    return button;
+  };
+
+  if (slides.length > 1) root.append(arrow('prev', '上一张'), arrow('next', '下一张'));
+
+  /** 只留当前张可见可点；其余 inert + aria-hidden，键盘和读屏也进不去。 */
+  function applyState() {
+    for (const [i, slide] of slides.entries()) {
+      const active = i === index;
+      slide.classList.toggle('is-current', active);
+      slide.inert = !active;
+      slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+    }
+    count.textContent = `${index + 1} / ${slides.length}`;
+  }
+
+  /** 把正在进行的过渡直接落定（连续点击时先把上一段走完）。 */
+  function settle() {
+    if (transition) {
+      clearTimeout(transition.timeout);
+      transition.incoming.removeEventListener('transitionend', transition.onEnd);
+      transition = null;
+    }
+    for (const slide of slides) {
+      slide.classList.remove('is-entering', 'is-leaving');
+      slide.style.transition = '';
+      slide.style.transform = '';
+    }
+    applyState();
+  }
+
+  function go(step) {
+    if (slides.length < 2) return;
+    settle();
+    const next = (index + step + slides.length) % slides.length;
+    if (next === index) return;
+    const incoming = slides[next];
+    const outgoing = slides[index];
+    index = next;
+
+    const reduced =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) {
+      applyState();
+      return;
+    }
+
+    const enterFrom = carouselTransform(spec.direction, step);
+    const leaveTo = carouselTransform(spec.direction, -step);
+    incoming.classList.remove('is-leaving');
+    incoming.classList.add('is-entering');
+    outgoing.classList.remove('is-entering');
+    outgoing.classList.add('is-leaving');
+
+    // 先把两张都摆到起点（incoming 在入场侧、outgoing 在原位），强制一次 reflow，
+    // 再恢复过渡并走向终点 —— 否则浏览器会把两次样式变更合批，动画根本不发生。
+    incoming.style.transition = 'none';
+    incoming.style.transform = enterFrom;
+    outgoing.style.transition = 'none';
+    outgoing.style.transform = 'none';
+    void incoming.offsetWidth;
+
+    incoming.style.transition = '';
+    outgoing.style.transition = '';
+
+    const token = {};
+    const onEnd = (event) => {
+      if (event.target !== incoming || event.propertyName !== 'transform') return;
+      if (transition && transition.token === token) settle();
+    };
+    transition = {
+      token,
+      incoming,
+      onEnd,
+      timeout: setTimeout(() => {
+        if (transition && transition.token === token) settle();
+      }, CAROUSEL_SLIDE_MS + 120),
+    };
+    incoming.addEventListener('transitionend', onEnd);
+
+    requestAnimationFrame(() => {
+      if (!transition || transition.token !== token) return;
+      incoming.style.transform = '';
+      outgoing.style.transform = leaveTo;
+    });
+    count.textContent = `${index + 1} / ${slides.length}`;
+  }
+
+  function shouldPlay() {
+    return autoplay && spec.autoplay && slides.length > 1 && !hovered && !focused && root.isConnected;
+  }
+
+  /**
+   * 到点时真的能切吗？两件事不能放进 shouldPlay，否则计时链会断掉、再也醒不过来：
+   *   - document.hidden：标签页在后台加载时初始就是 hidden，可能等不到 visibilitychange；
+   *   - 触屏点开的详情（.is-open）关闭时没有任何事件。
+   * 所以计时链照常跑，只在这一拍跳过；visible / 详情关掉之后下一拍照常走。
+   */
+  const canAdvance = () => !document.hidden && !root.querySelector('.cell.is-open');
+
+  function syncTimer() {
+    clearTimeout(timer);
+    timer = null;
+    if (!root.isConnected) {
+      liveCarousels.delete(syncTimer);
+      return;
+    }
+    if (!shouldPlay()) return;
+    timer = setTimeout(() => {
+      timer = null;
+      if (!root.isConnected) {
+        liveCarousels.delete(syncTimer);
+        return;
+      }
+      if (shouldPlay() && canAdvance()) go(1);
+      syncTimer();
+    }, spec.interval * 1000);
+  }
+
+  applyState();
+  if (autoplay && spec.autoplay && slides.length > 1) {
+    // 触屏上 mouseenter 之后可能永远等不到 mouseleave，只用 hover 能力判断。
+    // 焦点交给 shouldPlay；页面可见性和触屏详情在每一拍用 canAdvance 判断。
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(hover: hover)').matches) {
+      root.addEventListener('mouseenter', () => {
+        hovered = true;
+        syncTimer();
+      });
+      root.addEventListener('mouseleave', () => {
+        hovered = false;
+        syncTimer();
+      });
+    }
+    root.addEventListener('focusin', () => {
+      focused = true;
+      syncTimer();
+    });
+    root.addEventListener('focusout', (event) => {
+      if (root.contains(event.relatedTarget)) return;
+      focused = false;
+      syncTimer();
+    });
+    liveCarousels.add(syncTimer);
+    bindCarouselVisibility();
+    // 此刻根节点还没被 append 到文档里（createCell 只是返回它），同步跑会被
+    // isConnected 误判成「已销毁」。放到微任务里：调用方这一手 append 完再开始计时。
+    queueMicrotask(syncTimer);
+  }
+
+  return root;
+}
+
+/**
+ * Build the DOM for one showcase cell. `options.autoplay = false` keeps previews
+ * still while editing (the admin board passes it); the home page uses the data.
+ */
+export function createCell(cell, { autoplay = true } = {}) {
+  const isContainer = cell.type === 'container';
+  // 「跳转链接」和「嵌入的页面」互斥：两个地址都留着，由 clickMode 说哪个生效。
+  // 容器不参与这两项（里面的子盒子链接不能形成嵌套 <a>）。
+  const clickEmbed = !isContainer && cell.clickMode !== 'link' ? cell.embed || '' : '';
+  const clickLink = !isContainer && cell.clickMode === 'link' ? cell.link || '' : '';
   const node = document.createElement(clickLink ? 'a' : 'article');
   node.className = cellClasses(cell).join(' ');
-  node.dataset.id = cell.id;
+  // 子盒子没有 id —— 别把 undefined 写成字符串
+  if (cell.id) node.dataset.id = cell.id;
   node.dataset.fit = cell.imageFit;
   // the layout pass needs the units; the classes alone are not readable back
   node.dataset.w = SIZES[cell.size] ? SIZES[cell.size].w : 1;
@@ -174,6 +492,12 @@ export function createCell(cell) {
     node.href = resolveLink(clickLink);
     node.target = '_blank';
     node.rel = 'noopener noreferrer';
+  }
+
+  // 容器：自己的链接 / 嵌入 / 角标 / 悬浮详情都不渲染，整块交给轮播
+  if (isContainer) {
+    node.append(createCarousel(cell, { autoplay }));
+    return node;
   }
 
   if (cell.type === 'image') {

@@ -295,7 +295,13 @@
 
     <div class="scrim" id="scrim" hidden></div>
 
-    <!-- ---------------------------------------------------- editor drawer -->
+    <!--
+      格子编辑面板模板。JS 克隆出两个实例：
+        · 主面板（id 原样保留）
+        · 容器里的子盒子面板（所有 id 加 nx- 前缀）
+      模板内容不在文档树里，所以两边的 id 不会冲突。
+    -->
+    <template id="cell-editor-template">
     <aside class="drawer" id="drawer" hidden aria-label="格子编辑">
       <div class="drawer__head">
         <strong id="drawer-title">编辑格子</strong>
@@ -315,6 +321,7 @@
               <option value="image">图片封面（格子上展示图片）</option>
               <option value="html">网页封面（封面就是一个 HTML，可带动画）</option>
               <option value="solid">纯色封面（一块颜色）</option>
+              <option value="container">容器盒子（里面放多个盒子，可轮播）</option>
             </select>
           </div>
           <div class="field" id="field-sizes">
@@ -407,7 +414,46 @@
           </div>
         </fieldset>
 
-        <fieldset class="fieldset">
+        <fieldset class="fieldset" id="fs-container" hidden>
+          <legend>容器</legend>
+          <div class="field">
+            <label for="ed-container-mode">模式</label>
+            <select class="input" id="ed-container-mode">
+              <option value="carousel">轮播</option>
+            </select>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="ed-container-direction">轮播方向</label>
+              <select class="input" id="ed-container-direction"></select>
+            </div>
+            <div class="field">
+              <label for="ed-container-trigger">触发方式</label>
+              <select class="input" id="ed-container-trigger">
+                <option value="auto">定时自动</option>
+                <option value="manual">手动切换</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" id="field-container-interval">
+            <label for="ed-container-interval">自动切换间隔（秒，2–60）</label>
+            <input class="input" id="ed-container-interval" type="number" min="2" max="60" step="1" />
+          </div>
+          <div class="field">
+            <label>容器里的盒子</label>
+            <ul class="container-list" id="ed-container-items"></ul>
+            <div class="container-actions">
+              <button class="btn btn--ghost" id="btn-container-add" type="button">＋ 新建盒子</button>
+              <button class="btn btn--ghost" id="btn-container-import" type="button">从仓库导入</button>
+            </div>
+            <p class="hint">
+              子盒子与容器同尺寸；点列表里的盒子（或棋盘上的子盒子）打开它的编辑面板。
+              容器盒子不能放进容器里。
+            </p>
+          </div>
+        </fieldset>
+
+        <fieldset class="fieldset" id="fs-overlay">
           <legend>悬浮详情</legend>
           <label class="check">
             <input type="checkbox" id="ed-ov-enabled" />
@@ -447,7 +493,7 @@
           </div>
         </fieldset>
 
-        <fieldset class="fieldset">
+        <fieldset class="fieldset" id="fs-action">
           <legend>点击这个格子时</legend>
           <div class="segmented" id="action-tabs" role="tablist" aria-label="点击行为">
             <button class="segmented__btn" type="button" id="tab-link" data-action="link" role="tab">跳转链接</button>
@@ -517,6 +563,21 @@
         <button class="btn btn--primary" id="ed-done" type="button">完成</button>
       </div>
     </aside>
+    </template>
+
+    <!-- 容器：从盒子仓库挑选子盒子（容器盒子不能嵌套，列表里不会出现） -->
+    <div class="share-dialog" id="container-import" hidden>
+      <div class="share-card" role="dialog" aria-modal="true" aria-labelledby="container-import-title">
+        <h2 id="container-import-title">从盒子仓库导入</h2>
+        <p class="share-hint">
+          选一个盒子放进容器。容器盒子不能放进容器里，所以不会出现在这里。
+        </p>
+        <ul class="file-list" id="container-import-list"></ul>
+        <div class="share-actions">
+          <button class="btn btn--ghost" id="container-import-cancel" type="button">取消</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 分享窗口：选一颗盒子之后填标签（必填）和描述（可选） -->
     <div class="share-dialog" id="share-dialog" hidden>

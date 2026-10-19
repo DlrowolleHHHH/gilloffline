@@ -709,6 +709,81 @@
   background: var(--ink-700);
 }
 
+/*
+ * 容器里子盒子的编辑面板：和主面板同宽，从右侧滑进来整块盖住它。
+ * z-index 必须高于主抽屉（40）、低于取色面板（50）。
+ */
+.drawer--nested {
+  z-index: 45;
+  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.55), -1px 0 0 var(--line);
+}
+
+/* 容器编辑区里的子盒子列表 */
+.container-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.container-row {
+  gap: 6px;
+  padding: 5px 6px;
+}
+
+.container-row__open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.container-row__open:hover .file-row__name {
+  color: var(--accent);
+}
+
+.container-row .file-row__meta {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.container-row .file-row__del {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.container-row .file-row__del:hover {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.container-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .fieldset {
   display: flex;
   flex-direction: column;

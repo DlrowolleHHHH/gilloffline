@@ -12,9 +12,9 @@
 | 文件 | 负责 |
 | --- | --- |
 | `server/store.js` | 数据模型、清洗（sanitize）、**不重叠修复**（保存时的最后防线） |
-| `web/js/shared.js` | 几何与布局核心：`applyGridLayout`、`packBoard`、`repairBoard`、`firstFreeSpot`、碰撞判断 |
-| `web/js/board.js` | 棋盘的交互与渲染：拖拽手势、网格吸附、ghost 预览、行数增长 |
-| `web/js/admin.js` | 管理页把两者接起来：工具条（列数/间隔/缩放）、抽屉（含**自绘取色面板**：SV 区 + 色相/透明度条 + HEX/RGB/HSV + 吸管）、脏标记；身份胶囊、**盒子分享**（选盒子模式 + 分享窗口）、「我分享的盒子」/「盒子仓库」面板 |
+| `web/js/shared.js` | 几何与布局核心：`applyGridLayout`、`packBoard`、`repairBoard`、`firstFreeSpot`、碰撞判断；格子 DOM（`createCell`）与容器轮播（`createCarousel`、定时器） |
+| `web/js/board.js` | 棋盘的交互与渲染：拖拽手势、网格吸附、ghost 预览、行数增长；子盒子点击走 `onChildEdit`，轮播箭头 `data-no-drag` 不触发拖拽 |
+| `web/js/admin.js` | 管理页把两者接起来：工具条（列数/间隔/缩放）、抽屉（**模板克隆出主面板 + 容器子盒子面板**；含**自绘取色面板**：SV 区 + 色相/透明度条 + HEX/RGB/HSV + 吸管）、脏标记；身份胶囊、**盒子分享**（选盒子模式 + 分享窗口）、「我分享的盒子」/「盒子仓库」面板 |
 | `web/js/home.js` | 主页：套用 `site` 设置（强调色、间隔、布局）并渲染；子管理员的站（`?userid=…`）还会亮出右上角那个 `#admin-entry`（`position: fixed` + `z-index: 40`，**故意压在**全屏嵌入 80/81 和提示条 60 下面） |
 | `server/repository.js` | 盒子仓库：全局共享的盒子清单（SQLite `boxes` 表，按 label / created_at 建了索引），按 label 归类；入仓前过 `store.normalizeCell` 清洗；旧版 `repository.json` 首次访问时导入并改名 |
 | `web/css/admin.css` | `.admin-board`（棋盘容器）与 `.admin-board::before`（格线） |
@@ -46,6 +46,12 @@
 - **`size` 是 flow 的尺寸来源**，是预设关键字。注意它的键序是**「行×列」**：`3x6` = 宽 6 × 高 3
   （`SIZE_UNITS` 在 `server/store.js`，`SIZES` 在两边各有一份，必须同步）。字符串解析它是坑，别做。
   两者**互不派生**：棋盘用 `pos`，flow 用 `size`；`cellUnits()` 已经处理好（有 `pos` 就用 `pos`）。
+- **容器格子**（`type: 'container'`）带 `container: { mode, direction, autoplay, interval, items }`：
+  `mode` 目前只有 `'carousel'`；`direction` 是**内容移动方向**（`left/right/up/down`）；`interval` 2–60 秒。
+  子盒子是完整 cell，但**没有 `id`、没有 `pos`**，`size` 固定 `'1x1'` 只是占位——渲染时永远铺满容器，
+  绝不能拿它算尺寸。容器不能嵌套：服务端把 `type:'container'` 的子项直接丢掉，客户端渲染 / 仓库导入也过滤。
+  容器自身的 `link` / `embed` / `html` / `image` / 角标 / 悬浮详情都不参与渲染（服务端清空），
+  否则容器若成了 `<a>`，里面的子盒子链接会形成嵌套 `<a>`。
 - `pos` 在 flow 文档里也会被保留（`normalizeCell` 两种布局都存）：来回切换布局不能丢摆位。
 - **全屏展开的设置挂在 `cell.fullscreen` 上**：`{ margin, radius, color }`。`margin` 是
   **预置档位**（`'0/0'` … `'20/20'`，含义是「上下% / 左右%」，`FS_MARGINS` 在
@@ -66,7 +72,8 @@
   取色面板是**自绘**的：原生 `<input type="color">` 弹的是浏览器/系统的窗口，里面塞不进
   「透明」和自定义格式 —— 别再换回原生控件。
 - **封面 与 嵌入是两个字段**（别再把它们混起来）：`html` 是「封面的 HTML」，只在 `type: 'html'`
-  的「网页封面」上用，直接铺在格子上渲染；`embed` 是「嵌入的 HTML」，三种类型都能有。
+  的「网页封面」上用，直接铺在格子上渲染；`embed` 是「嵌入的 HTML」，图片 / 网页 / 纯色三种类型都能有
+  （容器本身不参与）。
   有 `embed` 时 `createCell` 会把地址挂到 `dataset.fullscreen` 上并渲染那个放大角标 ——
   主页据此把**嵌入的页面**全屏展开（展开的永远不是封面）。`htmlCover` 那条老字段只在
   `normalizeCell` 里做过渡映射（老数据 = 网页当嵌入页面、封面退成纯色），别再引回来。
@@ -264,7 +271,34 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 | 按 Esc 收取色面板，连抽屉一起关了 | 抽屉的 Esc 处理和面板的都挂在 `document` 上；`stopPropagation()` 挡不住同一个节点上的其它监听，要用 `stopImmediatePropagation()`（面板那个先注册，先跑） |
 | 点「尺寸」把格子的点击行为改了 | `bindActionTabs()` 原来扫全页的 `.segmented__btn`；棋盘上方新加的那组也是这个类，被一起接上了。**分组控件的选择器要带容器**（现在扫 `#action-tabs`） |
 
-## 8. 改这块代码之前的检查表
+## 8. 容器盒子（轮播）的几个契约
+
+- **轮播模式不落 DOM 数据**：`createCell` 在 `type === 'container'` 时只构建外观 + `.carousel`，
+  不渲染容器自己的链接 / 嵌入 / 角标 / 悬浮详情。子盒子照常走 `createCell(item, { autoplay: false })`，
+  因此图片 / 网页 / 纯色、悬浮详情、链接、全屏嵌入在子盒子上原样可用。
+- **计时器是 setTimeout 链 + 模块级注册表**，不是 `setInterval`：
+  每一拍重新判断悬停 / 焦点 / `document.hidden` / `root.isConnected`。节点被 `board.refresh` 或
+  预览 `replaceChildren()` 替换后，下一拍发现 `isConnected === false` 就退出注册表。
+  **初始的 `syncTimer()` 必须 `queueMicrotask`**：`createCell` 返回的根节点此刻还没被 append，
+  同步跑会被 isConnected 误判成「已销毁」，计时器永远不开始。
+  `document.hidden` 和触屏 `.cell.is-open` **不能放进 shouldPlay**（那样计时链会断、且没有事件把它唤醒），
+  只在到点时跳过这一拍。棋盘 `boardSlot` 传 `autoplay: false`，抽屉预览保留自动播放。
+- **抽屉是两个实例**：`web/admin.html` 里的 `<template id="cell-editor-template">` 被克隆两次。
+  主面板前缀为空（`#drawer` / `#preview` / `#ed-*` 原样保留），子面板前缀 `nx-`。
+  克隆时**根节点自己的 id 也要改**（`querySelectorAll('[id]')` 不包含根元素）—— 漏了会和主面板撞 id。
+  所有字段查找、分段控件、上传、取色都通过实例的 `els` 走，**不要再写全局 `els` / `$('ed-…')`**。
+  `syncActionTabs` 过去扫全页 `.segmented__btn`，会清掉棋盘手柄开关的 `is-on`；现在按面板作用域取。
+- **保存会整份替换文档**：`state.doc = absorbDoc(saved)` 后，主面板按 `state.editingId` 重新指向，
+  子面板按 `indexInParent` 重新指向 `mainEditor.cell.container.items[index]`；找不到就关掉子面板。
+  `importJson` 直接 `closeDrawer()`，避免旧对象写回。
+- **保存 / 导入 / 撤销子盒子**：容器列表用**数组下标**定位（子盒子没有 id），删除后重渲染；
+  子面板的删除按对象引用找回下标。子面板改动后要刷新父列表、父预览、以及棋盘上父容器的 slot。
+- **子面板预览按父容器的 `w × h` 画**（`cellUnits(parent)`），绝不看子盒子自己的 `size`。
+- **棋盘上的子盒子**：slide / 子 cell 带 `data-child-index`，`board.js` 的 click 分支命中它就走
+  `onChildEdit(容器 id, 下标)`，不再打开容器面板；轮播箭头带 `data-no-drag`，`onPointerDown` 直接跳过。
+- **空容器 / 单个子盒子**：都安全；没有箭头、没有定时器，空容器显示 `.carousel__empty`。
+
+## 9. 改这块代码之前的检查表
 
 - [ ] 老文档（无 `layout`/`pos`）的渲染路径没被碰到？
 - [ ] `dataset.pitch` / `dataset.inset` 与实际渲染一致（任何偏移都要同步进去）？
@@ -277,4 +311,9 @@ DATA_DIR=/tmp/gilltz/data PORT=3999 ADMIN_PASSWORD=testpw node server/index.js &
 - [ ] 手势的几个入口（格子本体 / 右下角方块，方块还有两种模式）都还汇到同一个 `startDrag`？
       新加的分段控件没被抽屉那套 `bindActionTabs` 误接上？
 - [ ] 主页的详情面板还是「鼠标 hover / 键盘 `:focus-visible` / 触屏 `.is-open`」三条，没有哪一条会赖着不动？
+- [ ] 容器子盒子仍然无 `id` / `pos`、`size` 只是 `1x1` 占位？容器仍然不能嵌套（服务端 / 渲染 / 仓库导入三处都过滤）？
+- [ ] 两个抽屉实例的 id 不冲突（子面板 `nx-` 前缀，**根节点也加了**）？没有残留的全页 `$('ed-…')` / `.segmented__btn` 扫描？
+- [ ] 保存 / 导入后，抽屉里的 cell 引用重新指向新文档，没有写回孤儿对象？
+- [ ] 轮播计时器在节点被替换后能自行退出？切后台 / 悬停 / 触屏详情只暂停一拍，不会把计时链断死？
+- [ ] 棋盘上点子盒子打开的是子盒子面板、拖拽仍然移动容器、点箭头不会触发拖拽？
 - [ ] 上面第 6 节那七条断言都跑过？

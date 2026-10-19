@@ -123,7 +123,8 @@ async function boot() {
     if (!siteCells.length) {
       renderEmpty();
     } else {
-      grid.append(...siteCells.map(createCell));
+      // 包一层箭头函数：createCell 的第二个参数是选项，不能让 map 把下标传进来
+      grid.append(...siteCells.map((cell) => createCell(cell)));
     }
     layout();
   } catch (err) {
@@ -285,6 +286,15 @@ grid.addEventListener('click', (event) => {
   const cell = event.target.closest('.cell');
   if (!cell) {
     closeOpenCells(); // 点到卡片之间的空隙
+    return;
+  }
+  /*
+   * 容器本体（箭头以外的空白处）不参与「详情 / 链接 / 全屏」那套逻辑。
+   * 点真正的子盒子时 closest 命中的是子盒子，不会走到这里；箭头自己 stopPropagation。
+   * 不加这一句的话，容器里的子盒子详情会让容器被误判成「有详情」。
+   */
+  if (cell.classList.contains('cell--container')) {
+    closeOpenCells();
     return;
   }
   // touch：没有 hover。用 pointer 能力判断，别用宽度 —— 横屏的手机照样没有 hover

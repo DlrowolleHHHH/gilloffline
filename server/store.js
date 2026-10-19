@@ -53,7 +53,13 @@ const SIZE_UNITS = {
 };
 const DIRECTIONS = ['left', 'right', 'top', 'bottom'];
 const RATIOS = ['1/1', '1/2'];
-const TYPES = ['image', 'solid', 'html'];
+const TYPES = ['image', 'solid', 'html', 'container'];
+/** 容器里能放的类型：容器不能嵌套（子盒子不可以是容器）。 */
+const CHILD_TYPES = ['image', 'solid', 'html'];
+/** 容器的呈现模式。目前只有轮播，留一个列表给以后的模式。 */
+const CONTAINER_MODES = ['carousel'];
+/** 轮播方向 = 内容移动的方向。和悬浮详情的 DIRECTIONS 是两套词。 */
+const CONTAINER_DIRECTIONS = ['left', 'right', 'up', 'down'];
 /** 格子的点击用哪个：跳转链接，还是全屏展开嵌入的页面（两者互斥，但两个地址都留着）。 */
 const CLICK_MODES = ['link', 'embed'];
 const FITS = ['cover', 'contain'];
@@ -63,6 +69,12 @@ const LAYOUTS = ['flow', 'board'];
 const GAP_LEVELS = ['s', 'm', 'l'];
 
 const MAX_CELLS = 200;
+/** 一个容器最多放多少个盒子（防跑飞；客户端也有一份，必须同步）。 */
+const MAX_CONTAINER_ITEMS = 30;
+/** 自动轮播的间隔，秒。 */
+const MIN_CONTAINER_INTERVAL = 2;
+const MAX_CONTAINER_INTERVAL = 60;
+const DEFAULT_CONTAINER_INTERVAL = 5;
 const MAX_TITLE = 120;
 const MAX_BODY = 2000;
 const MAX_URL = 2048;
@@ -206,7 +218,47 @@ function normalizePos(raw, cols) {
 
 const sizeUnits = (cell) => SIZE_UNITS[cell.size] || SIZE_UNITS['1x1'];
 
-function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
+/**
+ * 容器盒子：一个格子里放多个子盒子。目前只有轮播模式。
+ *
+ * 子盒子仍是一颗完整的 cell（图片 / 纯色 / 网页、边框、角标、悬浮详情、链接 / 嵌入页都照旧），
+ * 但它们**不参与摆位**：没有 id、没有 pos，size 固定成 1x1（只是占位 —— 渲染时永远铺满容器，
+ * 绝不拿这个 size 去算尺寸）。删掉 id 也让归一化保持幂等：反复读取不会每次生成新 id。
+ *
+ * 容器不能嵌套：显式的 container 子项直接丢掉，`nested: true` 再兜一层
+ * （子项 type 只能在 CHILD_TYPES 里取，取不到就回落成 image）。
+ */
+function normalizeContainer(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const items = [];
+  if (Array.isArray(src.items)) {
+    for (const item of src.items) {
+      if (items.length >= MAX_CONTAINER_ITEMS) break;
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      if (item.type === 'container') continue; // 容器不能嵌套
+      const child = normalizeCell(item, { nested: true });
+      delete child.id;
+      delete child.pos;
+      child.size = '1x1';
+      items.push(child);
+    }
+  }
+  return {
+    mode: oneOf(src.mode, CONTAINER_MODES, 'carousel'),
+    // 内容移动方向：left = 当前张向左退出、下一张从右侧进入
+    direction: oneOf(src.direction, CONTAINER_DIRECTIONS, 'left'),
+    autoplay: typeof src.autoplay === 'boolean' ? src.autoplay : true,
+    interval: safeNumber(
+      src.interval,
+      MIN_CONTAINER_INTERVAL,
+      MAX_CONTAINER_INTERVAL,
+      DEFAULT_CONTAINER_INTERVAL
+    ),
+    items,
+  };
+}
+
+function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS, nested = false } = {}) {
   const src0 = raw && typeof raw === 'object' ? raw : {};
   // 过渡：早先试过一版「封面模式」（htmlCover 布尔，页面藏在封面后面）。
   // 现在「封面」和「嵌入的页面」是两个字段，那一版的意思就是「网页当嵌入的页面、
@@ -214,11 +266,12 @@ function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
   const src = src0.htmlCover === true
     ? { ...src0, type: src0.type === 'html' ? 'solid' : src0.type, embed: src0.embed || src0.html, html: '' }
     : src0;
-  const type = oneOf(src.type, TYPES, 'image');
+  const type = oneOf(src.type, nested ? CHILD_TYPES : TYPES, 'image');
   const cell = {
     id: typeof src.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(src.id) ? src.id : newId(),
     type,
-    size: oneOf(src.size, SIZES, '1x1'),
+    // 子盒子的尺寸由容器决定；这里只留一个中性占位值
+    size: nested ? '1x1' : oneOf(src.size, SIZES, '1x1'),
     borderColor: safeColorOrNone(src.borderColor, '#7e46b9'),
     borderWidth: safeNumber(src.borderWidth, 0, 20, 2),
     radius: safeNumber(src.radius, 0, 64, 14),
@@ -243,10 +296,25 @@ function normalizeCell(raw, { layout = 'flow', columns = MAX_COLS } = {}) {
     fullscreen: normalizeFullscreen(src.fullscreen),
   };
 
-  // Positions are kept in both layouts: a flow doc that has been on a board must
-  // not lose its arrangement when it switches back and forth.
-  const pos = normalizePos(src.pos, layout === 'board' ? columns : MAX_COLS);
-  if (pos) cell.pos = pos;
+  if (!nested && type === 'container') {
+    cell.container = normalizeContainer(src.container);
+    // 容器本身不参与链接 / 嵌入 / 角标 / 悬浮详情：容器若是 <a>，里面的子盒子链接
+    // 就成了嵌套 <a>。编辑面板也把这几项藏起来，这里把值也清成确定的空值（幂等）。
+    cell.image = '';
+    cell.html = '';
+    cell.embed = '';
+    cell.link = '';
+    cell.imageTitle = '';
+    cell.clickMode = 'embed';
+    cell.overlay = normalizeOverlay({});
+  }
+
+  if (!nested) {
+    // Positions are kept in both layouts: a flow doc that has been on a board must
+    // not lose its arrangement when it switches back and forth.
+    const pos = normalizePos(src.pos, layout === 'board' ? columns : MAX_COLS);
+    if (pos) cell.pos = pos;
+  }
   return cell;
 }
 
@@ -467,6 +535,13 @@ module.exports = {
   DIRECTIONS,
   RATIOS,
   TYPES,
+  CHILD_TYPES,
+  CONTAINER_MODES,
+  CONTAINER_DIRECTIONS,
+  MAX_CONTAINER_ITEMS,
+  MIN_CONTAINER_INTERVAL,
+  MAX_CONTAINER_INTERVAL,
+  DEFAULT_CONTAINER_INTERVAL,
   FITS,
   normalizeDoc,
   normalizeCell,

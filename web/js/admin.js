@@ -3,11 +3,16 @@ import {
   SIZE_ORDER,
   DIRECTIONS,
   RATIOS,
+  CONTAINER_DIRECTIONS,
+  CONTAINER_INTERVAL,
+  MAX_CONTAINER_ITEMS,
   applyGridLayout,
   cellUnits,
   createCell,
   currentUserid,
+  childCell,
   defaultCell,
+  defaultContainer,
   defaultFullscreen,
   FS_MARGINS,
   defaultOverlay,
@@ -223,12 +228,12 @@ function bindSitePanel() {
           state.doc.cells = repairBoard(state.doc.cells, boardCols());
           renderBoard();
         }
-        if (state.editingId) renderPreview();
+        if (state.editingId) renderPreviews();
       }
       // the gap is drawn by the board and the preview too, not just the home page
       if (key === 'gap') {
         layoutBoard();
-        if (state.editingId) renderPreview();
+        if (state.editingId) renderPreviews();
       }
       if (RESPONSIVE_KEYS.includes(key)) {
         // 阈值反着写会让 pad 档整个消失；按服务端同一条规则（夹紧，不交换）先说一声并修正
@@ -268,6 +273,11 @@ const board = createBoard({
   onSelect: (id) => {
     if (sharing) return openShareDialog(id); // 选盒子模式：点格子是挑它去分享
     openDrawerUnlessCurrent(id, { withSizes: true });
+  },
+  // 点容器里的子盒子：直接打开它的编辑面板（onSelect 已经把容器面板打开了）
+  onChildEdit: (id, index) => {
+    if (sharing) return; // 选盒子模式已经由 onSelect 处理成分享容器
+    openChildEditor(id, index);
   },
   // a move or a resize has already patched its own slot, so there is nothing to
   // re-render here — just remember that the document is unsaved
@@ -414,48 +424,24 @@ function bindBoard() {
   // the cell size is measured from the panel, so a resize has to re-measure
   window.addEventListener('resize', () => {
     layoutBoard();
-    if (state.editingId) renderPreview();
+    if (state.editingId) renderPreviews();
     renderResponsiveHint(); // 换档的判据就是窗口宽度，说明那行得跟着变
   });
 }
 
 /* ------------------------------------------------------------------ editor */
 
-const drawer = $('drawer');
 const scrim = $('scrim');
-const preview = $('preview');
+const editorTemplate = $('cell-editor-template');
 
-const els = {
-  type: $('ed-type'),
-  borderWidth: $('ed-border-width'),
-  radius: $('ed-radius'),
-  borderColor: $('ed-border-color'),
-  borderColorText: $('ed-border-color-text'),
-  image: $('ed-image'),
-  html: $('ed-html'),
-  embed: $('ed-embed'),
-  fit: $('ed-fit'),
-  imageTitle: $('ed-image-title'),
-  imageTitleColor: $('ed-image-title-color'),
-  imageTitleColorText: $('ed-image-title-color-text'),
-  fsMargins: $('ed-fs-margins'),
-  fsRadius: $('ed-fs-radius'),
-  fsColor: $('ed-fs-color'),
-  fsColorText: $('ed-fs-color-text'),
-  color: $('ed-color'),
-  colorText: $('ed-color-text'),
-  ovEnabled: $('ed-ov-enabled'),
-  ovTitle: $('ed-ov-title'),
-  ovBody: $('ed-ov-body'),
-  ovDir: $('ed-ov-dir'),
-  ovRatio: $('ed-ov-ratio'),
-  ovBg: $('ed-ov-bg'),
-  ovBgText: $('ed-ov-bg-text'),
-  ovFg: $('ed-ov-fg'),
-  ovFgText: $('ed-ov-fg-text'),
-  link: $('ed-link'),
-  sizes: $('ed-sizes'),
-};
+/**
+ * 两个编辑面板实例：
+ *   mainEditor  —— 顶层格子（保留原来的 id，`#drawer` / `#preview` / `#ed-*` 不变）
+ *   childEditor —— 容器里的子盒子（id 全部加 nx- 前缀，从右侧盖在主面板上）
+ * 它们由同一个模板克隆出来，行为由 createCellEditor() 收在实例里。
+ */
+let mainEditor = null;
+let childEditor = null;
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
@@ -639,7 +625,7 @@ function applyPopColor() {
   paintSwatch(popTarget.swatch);
   popTarget.text.value = hex;
   pop.none.setAttribute('aria-pressed', 'false');
-  onEdited();
+  popTarget.editor.onEdited();
 }
 
 function moveSv(event) {
@@ -663,11 +649,11 @@ function positionPop(swatch) {
   pop.box.style.top = `${Math.min(Math.max(8, top), clampY)}px`;
 }
 
-function openColorPop(swatch, text, allowNone) {
+function openColorPop(swatch, text, allowNone, editor) {
   const base = swatch.dataset.color || swatch.dataset.fallback || '#7e46b9';
   const rgba = hexToRgba(base);
   popHsv = { ...rgbToHsv(rgba), a: rgba.a };
-  popTarget = { swatch, text, allowNone };
+  popTarget = { swatch, text, allowNone, editor };
   pop.none.hidden = !allowNone; // 只有边框颜色、底色有「透明」这个值
   pop.none.setAttribute('aria-pressed', String((swatch.dataset.color || '') === ''));
   pop.box.hidden = false;
@@ -779,7 +765,7 @@ pop.none.addEventListener('click', () => {
   paintSwatch(popTarget.swatch);
   popTarget.text.value = '';
   pop.none.setAttribute('aria-pressed', 'true');
-  onEdited();
+  popTarget.editor.onEdited();
   closeColorPop();
 });
 
@@ -803,257 +789,7 @@ document.addEventListener('keydown', (event) => {
   }
 });
 window.addEventListener('resize', closeColorPop);
-$('drawer').addEventListener('scroll', closeColorPop, { passive: true });
-
-/** 全屏留白的当前档位（'5/10' 这种），由下面的按钮组切换。 */
-let fsMarginMode = '0/0';
-
-function setMarginMode(key) {
-  fsMarginMode = FS_MARGINS.includes(key) ? key : '0/0';
-  for (const button of els.fsMargins.querySelectorAll('.margin-option')) {
-    button.setAttribute('aria-pressed', String(button.dataset.margin === fsMarginMode));
-  }
-}
-
-/**
- * 留白档位按钮：每个是一张「屏幕」缩略图，里面的深色边就是留白 —— 和选尺寸那排
- * 缩略图一个套路，用户不用自己算数字。
- */
-function buildMarginOptions() {
-  els.fsMargins.replaceChildren();
-  for (const key of FS_MARGINS) {
-    const [v, h] = key.split('/').map(Number);
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'margin-option';
-    button.dataset.margin = key;
-    button.setAttribute('aria-pressed', 'false');
-    button.title = v || h ? `上下 ${v}% · 左右 ${h}%` : '铺满整屏';
-
-    const screen = document.createElement('span');
-    screen.className = 'margin-option__screen';
-    const page = document.createElement('span');
-    page.className = 'margin-option__page';
-    // 52×34 的缩略图，按真实比例留白
-    page.style.inset = `${((v / 100) * 34).toFixed(1)}px ${((h / 100) * 52).toFixed(1)}px`;
-    screen.append(page);
-
-    const label = document.createElement('span');
-    label.className = 'margin-option__label';
-    label.textContent = v || h ? `${v}% / ${h}%` : '铺满';
-    button.append(screen, label);
-
-    button.addEventListener('click', () => {
-      setMarginMode(key);
-      onEdited();
-    });
-    els.fsMargins.append(button);
-  }
-}
-
-function buildSizeOptions() {
-  els.sizes.replaceChildren();
-  for (const key of SIZE_ORDER) {
-    const size = SIZES[key];
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'size-option';
-    button.dataset.size = key;
-    button.setAttribute('aria-pressed', 'false');
-
-    // a dot per grid unit, drawn on the biggest board we support (8 × 4)
-    const shape = document.createElement('span');
-    shape.className = 'size-option__shape';
-    for (let row = 0; row < 4; row += 1) {
-      for (let col = 0; col < 8; col += 1) {
-        const dot = document.createElement('span');
-        if (col >= size.w || row >= size.h) dot.style.visibility = 'hidden';
-        shape.append(dot);
-      }
-    }
-
-    const label = document.createElement('span');
-    label.textContent = `${size.label} ${key}`;
-    const note = document.createElement('span');
-    note.textContent = size.note;
-
-    button.append(shape, label, note);
-    button.addEventListener('click', () => {
-      const cell = currentCell();
-      if (!cell) return;
-      cell.size = key; // the flow layout's size, kept in step for the fallback
-      if (isBoard()) {
-        const others = state.doc.cells.filter((item) => item.id !== cell.id).map(rectOf).filter(Boolean);
-        const current = cell.pos || { x: 0, y: 0 };
-        const wanted = { x: current.x, y: current.y, w: Math.min(size.w, boardCols()), h: size.h };
-        const fits = wanted.x + wanted.w <= boardCols() && rectFree(others, wanted);
-        cell.pos = fits ? wanted : firstFreeSpot(others, boardCols(), size.w, size.h);
-      }
-      syncSizeButtons();
-      onEdited();
-    });
-    els.sizes.append(button);
-  }
-}
-
-function syncSizeButtons() {
-  const cell = currentCell();
-  const units = cell ? cellUnits(cell) : null;
-  for (const button of els.sizes.querySelectorAll('.size-option')) {
-    const size = SIZES[button.dataset.size];
-    // on a board the real size is pos.w/h — a freehand size matches no preset
-    const pressed = isBoard()
-      ? units && units.w === size.w && units.h === size.h
-      : button.dataset.size === cell?.size;
-    button.setAttribute('aria-pressed', String(Boolean(pressed)));
-    button.disabled = isBoard() && size.w > boardCols();
-  }
-}
-
-function buildSelects() {
-  els.ovDir.replaceChildren();
-  for (const option of DIRECTIONS) els.ovDir.append(new Option(option.label, option.value));
-  els.ovRatio.replaceChildren();
-  for (const option of RATIOS) els.ovRatio.append(new Option(option.label, option.value));
-}
-
-function currentCell() {
-  return state.doc.cells.find((cell) => cell.id === state.editingId) || null;
-}
-
-function fillForm(cell) {
-  closeColorPop(); // 换了一颗格子，面板里调的就不是它了
-  els.type.value = cell.type;
-  els.borderWidth.value = cell.borderWidth;
-  els.radius.value = cell.radius;
-  setColorPicker(els.borderColor, els.borderColorText, cell.borderColor);
-  els.image.value = cell.image;
-  els.html.value = cell.html || '';
-  els.embed.value = cell.embed || '';
-  els.fit.value = cell.imageFit;
-  els.imageTitle.value = cell.imageTitle;
-  setColorPicker(els.imageTitleColor, els.imageTitleColorText, cell.imageTitleColor);
-  setColorPicker(els.color, els.colorText, cell.color);
-  const fs = { ...defaultFullscreen(), ...(cell.fullscreen || {}) };
-  setMarginMode(fs.margin);
-  els.fsRadius.value = fs.radius;
-  setColorPicker(els.fsColor, els.fsColorText, fs.color);
-  els.ovEnabled.checked = cell.overlay.enabled;
-  els.ovTitle.value = cell.overlay.title;
-  els.ovBody.value = cell.overlay.body;
-  els.ovDir.value = cell.overlay.direction;
-  els.ovRatio.value = cell.overlay.ratio;
-  setColorPicker(els.ovBg, els.ovBgText, cell.overlay.bgColor);
-  setColorPicker(els.ovFg, els.ovFgText, cell.overlay.textColor);
-  els.link.value = cell.link;
-  // 打开时用数据里记着的那个；老数据没有这个字段时，服务端已经按老规矩补好了
-  actionTab = cell.clickMode === 'link' ? 'link' : 'embed';
-  syncActionTabs();
-
-  const thumbWrap = $('thumb-current');
-  if (cell.image) {
-    $('thumb-img').src = cell.image;
-    $('thumb-name').textContent = cell.image.length > 46 ? `…${cell.image.slice(-44)}` : cell.image;
-    thumbWrap.hidden = false;
-  } else {
-    thumbWrap.hidden = true;
-  }
-
-  syncSizeButtons();
-  syncTypeVisibility();
-}
-
-/**
- * 抽屉里的「点击这个格子时」是两个互斥选项：跳转链接 / 嵌入 HTML。
- * 两者都绑在格子的点击上，同一时刻只有一个生效 —— 所以用按钮切换。
- *
- * 但**两个地址都保留**：切换只是改「哪个生效」，填过的内容不丢，随时能切回来。
- * 生效的那个记在数据的 `clickMode` 里（老数据没有这个字段时由服务端按老规矩补上）。
- * 界面上的 `actionTab` 就是它的一份投影。
- */
-let actionTab = 'link';
-
-function syncActionTabs() {
-  for (const btn of document.querySelectorAll('.segmented__btn')) {
-    const on = btn.dataset.action === actionTab;
-    btn.classList.toggle('is-on', on);
-    btn.setAttribute('aria-selected', String(on));
-  }
-  $('panel-link').hidden = actionTab !== 'link';
-  $('panel-embed').hidden = actionTab !== 'embed';
-}
-
-/**
- * 切到另一边。两边的地址都**保留**：填过的内容不因为切换而丢，只是生效的换一个，
- * 想换回来点一下就行。生效的那个记在数据的 clickMode 里。
- */
-function switchActionTab(next) {
-  if (next === actionTab) return;
-  actionTab = next;
-  syncActionTabs();
-  onEdited();
-}
-
-function bindActionTabs() {
-  for (const btn of document.querySelectorAll('#action-tabs .segmented__btn')) {
-    btn.addEventListener('click', () => switchActionTab(btn.dataset.action));
-  }
-}
-
-function syncTypeVisibility() {
-  const type = els.type.value;
-  $('fs-image').hidden = type !== 'image';
-  // 「封面的 HTML」只有网页封面用；「嵌入的 HTML」和「角标文字」三种类型都有，一直显示
-  $('fs-html').hidden = type !== 'html';
-  $('fs-solid').hidden = type !== 'solid';
-}
-
-/** Pull every field back into the cell being edited. */
-function applyForm() {
-  const cell = currentCell();
-  if (!cell) return;
-  cell.type = els.type.value;
-  cell.borderWidth = Number(els.borderWidth.value) || 0;
-  cell.radius = Number(els.radius.value) || 0;
-  cell.borderColor = readOptionalColor(els.borderColor, els.borderColorText, '#7e46b9');
-  cell.image = els.image.value.trim();
-  cell.html = els.html.value.trim();
-  // 两个地址都存下来（互斥只体现在 clickMode 上），填过的内容不会因为切换而丢
-  cell.embed = els.embed.value.trim();
-  cell.clickMode = actionTab;
-  cell.imageFit = els.fit.value;
-  cell.imageTitle = els.imageTitle.value;
-  cell.imageTitleColor = readColorPicker(els.imageTitleColor, els.imageTitleColorText, '#ffffff');
-  cell.color = readOptionalColor(els.color, els.colorText, '#7e46b9');
-  cell.fullscreen = {
-    margin: fsMarginMode,
-    radius: Math.min(64, Math.max(0, Math.round(Number(els.fsRadius.value) || 0))),
-    color: readColorPicker(els.fsColor, els.fsColorText, '#08070d'),
-  };
-  cell.overlay = {
-    enabled: els.ovEnabled.checked,
-    title: els.ovTitle.value,
-    body: els.ovBody.value,
-    direction: els.ovDir.value,
-    ratio: els.ovRatio.value,
-    bgColor: readColorPicker(els.ovBg, els.ovBgText, '#0b0a12f2'),
-    textColor: readColorPicker(els.ovFg, els.ovFgText, '#ffffff'),
-  };
-  cell.link = els.link.value.trim();
-  // 位置和尺寸不在这里改：抽屉里没有那一栏，摆位靠拖拽（board.js 的 legal()）、
-  // 尺寸靠拖右下角手柄或「尺寸」模版 —— 各自都带校验，这里不碰 cell.pos。
-}
-
-function onEdited() {
-  applyForm();
-  renderPreview();
-  const cell = currentCell();
-  if (cell) {
-    board.refresh(boardCells().find((item) => item.id === cell.id) || cell);
-    layoutBoard();
-  }
-  markDirty();
-}
+// 每个编辑面板的滚动容器都会在 createCellEditor() 里单独挂 scroll → closeColorPop
 
 /** The preview draws a board unit at about this many px. */
 const PREVIEW_UNIT = 62;
@@ -1063,92 +799,935 @@ const PREVIEW_MAX_H = 190;
 const PREVIEW_REFERENCE = 98;
 
 /** How much room the preview actually has (the box, minus its padding). */
-function previewWidth() {
-  const box = preview.parentElement;
+function previewWidth(gridEl) {
+  const box = gridEl.parentElement;
   const style = getComputedStyle(box);
   const pad = (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0);
   return Math.max(80, (box.clientWidth || 320) - pad);
 }
 
 /**
- * What will this cell look like on the page?
+ * 一个编辑面板实例。主面板和容器子盒子面板都从同一个模板克隆出来，
+ * 所有字段查找、事件绑定都收在实例里 —— 不能再有全局 `els` / `#drawer`。
  *
- * The answer is the same in both layouts: a cell spans `w × h` units, so the
- * preview draws **this cell and nothing else**, on a grid exactly that many
- * columns wide, scaled to fit the drawer.
- *
- * Drawing the real grid instead is what used to happen for a board document —
- * twelve columns of 96px is 1460px of grid inside a 390px drawer, with the cell
- * parked at its own column and therefore off-screen — and a flow document had
- * the mirror problem, a wide cell spilling out of the box (8 columns of 62px is
- * 566px). Both are the same bug: previewing the page instead of the cell.
+ * `nested: true` 时：
+ *   · 所有 id 加 prefix 前缀，label[for] 同步；
+ *   · 类型下拉去掉「容器盒子」；
+ *   · 永远没有尺寸模版，也不显示容器配置。
  */
-function renderPreview() {
-  const cell = currentCell();
-  preview.replaceChildren();
-  if (!cell) return;
-  preview.append(createCell(cell));
+function createCellEditor({ nested = false, prefix = '' } = {}) {
+  const root = editorTemplate.content.firstElementChild.cloneNode(true);
+  const byOldId = new Map();
+  const rename = (el) => {
+    if (!el.id) return;
+    const old = el.id;
+    el.id = prefix + old;
+    byOldId.set(old, el);
+  };
+  // 根节点自己的 id（drawer）也要加前缀：querySelectorAll 不会包含根元素
+  rename(root);
+  for (const el of root.querySelectorAll('[id]')) rename(el);
+  for (const label of root.querySelectorAll('label[for]')) {
+    label.htmlFor = prefix + label.htmlFor;
+  }
+  document.body.append(root);
 
-  const site = state.doc.site || {};
-  const { w, h } = cellUnits(cell); // pos when it has one, the named size otherwise
-  // Columns the page would give it: a board has a fixed count, a flow document
-  // caps the span at the column setting (0 = auto, which is the cell's own width)
-  const cols = Math.min(w, isBoard() ? boardCols() : Number(site.columns) || w);
-  const box = previewWidth();
-  // the page's spacing as a share of a cell, kept at whatever size we draw
-  const ratio = gapPx(site.gap) / PREVIEW_REFERENCE;
-  // how big one unit would be if the cell filled the box
-  const fitUnit = box / (cols + (cols - 1) * ratio);
-  const unit = Math.min(PREVIEW_UNIT, fitUnit, PREVIEW_MAX_H / (h + (h - 1) * ratio));
-  // The gap is stated at the *fit* size, not at `unit`: the layout pass divides
-  // the box by (cell + gap) and then multiplies by `scale` below, and the two
-  // cancel out exactly — so the drawn gap is `ratio * unit` either way.
-  preview.style.setProperty('--gap', `${(ratio * fitUnit).toFixed(2)}px`);
-  applyGridLayout(preview, cols, {
-    layout: 'board',
-    cells: [{ ...cell, pos: { x: 0, y: 0, w: cols, h } }],
-    minCell: 1, // the layout pass must not floor this: the preview always fits
-    scale: unit / fitUnit,
+  const byId = (name) => byOldId.get(name) || null;
+  const els = {
+    title: byId('drawer-title'),
+    close: byId('drawer-close'),
+    done: byId('ed-done'),
+    deleteBtn: byId('ed-delete'),
+    preview: byId('preview'),
+    sizesField: byId('field-sizes'),
+    sizes: byId('ed-sizes'),
+    type: byId('ed-type'),
+    borderWidth: byId('ed-border-width'),
+    radius: byId('ed-radius'),
+    borderColor: byId('ed-border-color'),
+    borderColorText: byId('ed-border-color-text'),
+    image: byId('ed-image'),
+    html: byId('ed-html'),
+    embed: byId('ed-embed'),
+    fit: byId('ed-fit'),
+    imageTitle: byId('ed-image-title'),
+    imageTitleColor: byId('ed-image-title-color'),
+    imageTitleColorText: byId('ed-image-title-color-text'),
+    thumbWrap: byId('thumb-current'),
+    thumbImg: byId('thumb-img'),
+    thumbName: byId('thumb-name'),
+    fsImage: byId('fs-image'),
+    fsHtml: byId('fs-html'),
+    fsCaption: byId('fs-caption'),
+    fsSolid: byId('fs-solid'),
+    fsOverlay: byId('fs-overlay'),
+    fsAction: byId('fs-action'),
+    fsContainer: byId('fs-container'),
+    fsMargins: byId('ed-fs-margins'),
+    fsRadius: byId('ed-fs-radius'),
+    fsColor: byId('ed-fs-color'),
+    fsColorText: byId('ed-fs-color-text'),
+    color: byId('ed-color'),
+    colorText: byId('ed-color-text'),
+    ovEnabled: byId('ed-ov-enabled'),
+    ovTitle: byId('ed-ov-title'),
+    ovBody: byId('ed-ov-body'),
+    ovDir: byId('ed-ov-dir'),
+    ovRatio: byId('ed-ov-ratio'),
+    ovBg: byId('ed-ov-bg'),
+    ovBgText: byId('ed-ov-bg-text'),
+    ovFg: byId('ed-ov-fg'),
+    ovFgText: byId('ed-ov-fg-text'),
+    link: byId('ed-link'),
+    actionTabs: byId('action-tabs'),
+    panelLink: byId('panel-link'),
+    panelEmbed: byId('panel-embed'),
+    btnUpload: byId('btn-upload'),
+    fileUpload: byId('upload-file'),
+    btnClearUpload: byId('btn-clear-upload'),
+    btnUploadHtml: byId('btn-upload-html'),
+    fileUploadHtml: byId('upload-file-html'),
+    btnOpenHtml: byId('btn-open-html'),
+    btnUploadEmbed: byId('btn-upload-embed'),
+    fileUploadEmbed: byId('upload-file-embed'),
+    btnOpenEmbed: byId('btn-open-embed'),
+    containerMode: byId('ed-container-mode'),
+    containerDirection: byId('ed-container-direction'),
+    containerTrigger: byId('ed-container-trigger'),
+    containerInterval: byId('ed-container-interval'),
+    containerIntervalField: byId('field-container-interval'),
+    containerItems: byId('ed-container-items'),
+    containerAdd: byId('btn-container-add'),
+    containerImport: byId('btn-container-import'),
+  };
+
+  if (nested) {
+    root.classList.add('drawer--nested');
+    root.setAttribute('aria-label', '容器子盒子编辑');
+    els.title.textContent = '编辑容器里的盒子';
+    els.deleteBtn.textContent = '删除这个盒子';
+    els.close.title = '关闭（返回容器）';
+    els.type.querySelector('option[value="container"]')?.remove();
+    els.sizesField.hidden = true;
+    els.fsContainer.hidden = true;
+  }
+
+  const editor = {
+    root,
+    els,
+    nested,
+    prefix,
+    cell: null,
+    parentEditor: null,
+    indexInParent: -1,
+    withSizes: false,
+    isOpen: false,
+  };
+
+  /** 全屏留白的当前档位（'5/10' 这种），由按钮组切换。 */
+  let marginMode = '0/0';
+  let actionTab = 'link';
+
+  function setMarginMode(key) {
+    marginMode = FS_MARGINS.includes(key) ? key : '0/0';
+    for (const button of els.fsMargins.querySelectorAll('.margin-option')) {
+      button.setAttribute('aria-pressed', String(button.dataset.margin === marginMode));
+    }
+  }
+
+  /**
+   * 留白档位按钮：每个是一张「屏幕」缩略图，里面的深色边就是留白 —— 和选尺寸那排
+   * 缩略图一个套路，用户不用自己算数字。
+   */
+  function buildMarginOptions() {
+    els.fsMargins.replaceChildren();
+    for (const key of FS_MARGINS) {
+      const [v, h] = key.split('/').map(Number);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'margin-option';
+      button.dataset.margin = key;
+      button.setAttribute('aria-pressed', 'false');
+      button.title = v || h ? `上下 ${v}% · 左右 ${h}%` : '铺满整屏';
+
+      const screen = document.createElement('span');
+      screen.className = 'margin-option__screen';
+      const page = document.createElement('span');
+      page.className = 'margin-option__page';
+      // 52×34 的缩略图，按真实比例留白
+      page.style.inset = `${((v / 100) * 34).toFixed(1)}px ${((h / 100) * 52).toFixed(1)}px`;
+      screen.append(page);
+
+      const label = document.createElement('span');
+      label.className = 'margin-option__label';
+      label.textContent = v || h ? `${v}% / ${h}%` : '铺满';
+      button.append(screen, label);
+
+      button.addEventListener('click', () => {
+        setMarginMode(key);
+        onEdited();
+      });
+      els.fsMargins.append(button);
+    }
+  }
+
+  function buildSizeOptions() {
+    els.sizes.replaceChildren();
+    for (const key of SIZE_ORDER) {
+      const size = SIZES[key];
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'size-option';
+      button.dataset.size = key;
+      button.setAttribute('aria-pressed', 'false');
+
+      // a dot per grid unit, drawn on the biggest board we support (8 × 4)
+      const shape = document.createElement('span');
+      shape.className = 'size-option__shape';
+      for (let row = 0; row < 4; row += 1) {
+        for (let col = 0; col < 8; col += 1) {
+          const dot = document.createElement('span');
+          if (col >= size.w || row >= size.h) dot.style.visibility = 'hidden';
+          shape.append(dot);
+        }
+      }
+
+      const label = document.createElement('span');
+      label.textContent = `${size.label} ${key}`;
+      const note = document.createElement('span');
+      note.textContent = size.note;
+
+      button.append(shape, label, note);
+      button.addEventListener('click', () => {
+        const cell = editor.cell;
+        if (!cell || nested) return;
+        cell.size = key; // the flow layout's size, kept in step for the fallback
+        if (isBoard()) {
+          const others = state.doc.cells.filter((item) => item.id !== cell.id).map(rectOf).filter(Boolean);
+          const current = cell.pos || { x: 0, y: 0 };
+          const wanted = { x: current.x, y: current.y, w: Math.min(size.w, boardCols()), h: size.h };
+          const fits = wanted.x + wanted.w <= boardCols() && rectFree(others, wanted);
+          cell.pos = fits ? wanted : firstFreeSpot(others, boardCols(), size.w, size.h);
+        }
+        syncSizeButtons();
+        onEdited();
+      });
+      els.sizes.append(button);
+    }
+  }
+
+  function syncSizeButtons() {
+    const cell = editor.cell;
+    const units = cell ? cellUnits(cell) : null;
+    for (const button of els.sizes.querySelectorAll('.size-option')) {
+      const size = SIZES[button.dataset.size];
+      // on a board the real size is pos.w/h — a freehand size matches no preset
+      const pressed = isBoard()
+        ? units && units.w === size.w && units.h === size.h
+        : button.dataset.size === cell?.size;
+      button.setAttribute('aria-pressed', String(Boolean(pressed)));
+      button.disabled = isBoard() && size.w > boardCols();
+    }
+  }
+
+  function buildSelects() {
+    els.ovDir.replaceChildren();
+    for (const option of DIRECTIONS) els.ovDir.append(new Option(option.label, option.value));
+    els.ovRatio.replaceChildren();
+    for (const option of RATIOS) els.ovRatio.append(new Option(option.label, option.value));
+    els.containerDirection.replaceChildren();
+    for (const option of CONTAINER_DIRECTIONS) {
+      els.containerDirection.append(new Option(option.label, option.value));
+    }
+  }
+
+
+  function currentCell() {
+    return editor.cell;
+  }
+
+  function fillForm() {
+    const cell = editor.cell;
+    if (!cell) return;
+    closeColorPop(); // 换了一颗格子，面板里调的就不是它了
+    els.type.value = nested && cell.type === 'container' ? 'image' : cell.type;
+    els.borderWidth.value = cell.borderWidth ?? 2;
+    els.radius.value = cell.radius ?? 14;
+    setColorPicker(els.borderColor, els.borderColorText, cell.borderColor);
+    els.image.value = cell.image || '';
+    els.html.value = cell.html || '';
+    els.embed.value = cell.embed || '';
+    els.fit.value = cell.imageFit || 'cover';
+    els.imageTitle.value = cell.imageTitle || '';
+    setColorPicker(els.imageTitleColor, els.imageTitleColorText, cell.imageTitleColor);
+    setColorPicker(els.color, els.colorText, cell.color);
+    const fs = { ...defaultFullscreen(), ...(cell.fullscreen || {}) };
+    setMarginMode(fs.margin);
+    els.fsRadius.value = fs.radius;
+    setColorPicker(els.fsColor, els.fsColorText, fs.color);
+    const overlay = { ...defaultOverlay(), ...(cell.overlay || {}) };
+    els.ovEnabled.checked = overlay.enabled;
+    els.ovTitle.value = overlay.title;
+    els.ovBody.value = overlay.body;
+    els.ovDir.value = overlay.direction;
+    els.ovRatio.value = overlay.ratio;
+    setColorPicker(els.ovBg, els.ovBgText, overlay.bgColor);
+    setColorPicker(els.ovFg, els.ovFgText, overlay.textColor);
+    els.link.value = cell.link || '';
+    // 打开时用数据里记着的那个；老数据没有这个字段时，服务端已经按老规矩补好了
+    actionTab = cell.clickMode === 'link' ? 'link' : 'embed';
+    syncActionTabs();
+
+    if (cell.image) {
+      els.thumbImg.src = cell.image;
+      els.thumbName.textContent = cell.image.length > 46 ? `…${cell.image.slice(-44)}` : cell.image;
+      els.thumbWrap.hidden = false;
+    } else {
+      els.thumbWrap.hidden = true;
+    }
+
+    syncSizeButtons();
+    syncTypeVisibility();
+    if (!nested && cell.type === 'container') {
+      ensureContainer(cell);
+      fillContainerForm(editor, cell);
+    }
+    els.sizesField.hidden = nested || editor.withSizes;
+  }
+
+  /**
+   * 抽屉里的「点击这个格子时」是两个互斥选项：跳转链接 / 嵌入 HTML。
+   * 两者都绑在格子的点击上，同一时刻只有一个生效 —— 所以用按钮切换。
+   *
+   * 但**两个地址都保留**：切换只是改「哪个生效」，填过的内容不丢，随时能切回来。
+   * 生效的那个记在数据的 `clickMode` 里（老数据没有这个字段时由服务端按老规矩补上）。
+   * 界面上的 `actionTab` 就是它的一份投影。
+   */
+  function syncActionTabs() {
+    for (const btn of els.actionTabs.querySelectorAll('.segmented__btn')) {
+      const on = btn.dataset.action === actionTab;
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-selected', String(on));
+    }
+    els.panelLink.hidden = actionTab !== 'link';
+    els.panelEmbed.hidden = actionTab !== 'embed';
+  }
+
+  /**
+   * 切到另一边。两边的地址都**保留**：填过的内容不因为切换而丢，只是生效的换一个，
+   * 想换回来点一下就行。生效的那个记在数据的 clickMode 里。
+   */
+  function switchActionTab(next) {
+    if (next === actionTab) return;
+    actionTab = next;
+    syncActionTabs();
+    onEdited();
+  }
+
+  function bindActionTabs() {
+    for (const btn of els.actionTabs.querySelectorAll('.segmented__btn')) {
+      btn.addEventListener('click', () => switchActionTab(btn.dataset.action));
+    }
+  }
+
+  function syncTypeVisibility() {
+    const type = els.type.value;
+    const asContainer = type === 'container' && !nested;
+    els.fsImage.hidden = type !== 'image';
+    // 「封面的 HTML」只有网页封面用；「嵌入的 HTML」和「角标文字」三种类型都有，一直显示
+    els.fsHtml.hidden = type !== 'html';
+    els.fsSolid.hidden = type !== 'solid';
+    // 容器只保留基本外观 + 容器配置：自己不作链接 / 嵌入 / 角标 / 悬浮详情
+    els.fsCaption.hidden = asContainer;
+    els.fsOverlay.hidden = asContainer;
+    els.fsAction.hidden = asContainer;
+    els.fsContainer.hidden = !asContainer;
+  }
+
+  /** Pull every field back into the cell being edited. */
+  function applyForm() {
+    const cell = editor.cell;
+    if (!cell) return;
+    cell.type = els.type.value;
+    cell.borderWidth = Number(els.borderWidth.value) || 0;
+    cell.radius = Number(els.radius.value) || 0;
+    cell.borderColor = readOptionalColor(els.borderColor, els.borderColorText, '#7e46b9');
+    cell.image = els.image.value.trim();
+    cell.html = els.html.value.trim();
+    // 两个地址都存下来（互斥只体现在 clickMode 上），填过的内容不会因为切换而丢
+    cell.embed = els.embed.value.trim();
+    cell.clickMode = actionTab;
+    cell.imageFit = els.fit.value;
+    cell.imageTitle = els.imageTitle.value;
+    cell.imageTitleColor = readColorPicker(els.imageTitleColor, els.imageTitleColorText, '#ffffff');
+    cell.color = readOptionalColor(els.color, els.colorText, '#7e46b9');
+    cell.fullscreen = {
+      margin: marginMode,
+      radius: Math.min(64, Math.max(0, Math.round(Number(els.fsRadius.value) || 0))),
+      color: readColorPicker(els.fsColor, els.fsColorText, '#08070d'),
+    };
+    cell.overlay = {
+      enabled: els.ovEnabled.checked,
+      title: els.ovTitle.value,
+      body: els.ovBody.value,
+      direction: els.ovDir.value,
+      ratio: els.ovRatio.value,
+      bgColor: readColorPicker(els.ovBg, els.ovBgText, '#0b0a12f2'),
+      textColor: readColorPicker(els.ovFg, els.ovFgText, '#ffffff'),
+    };
+    cell.link = els.link.value.trim();
+
+    // 容器配置：只写模式参数，**绝不碰 items**（列表的增删是另一条路径）
+    if (!nested && cell.type === 'container') {
+      const previous = cell.container && typeof cell.container === 'object' ? cell.container : defaultContainer();
+      const interval = Math.round(Number(els.containerInterval.value));
+      const clamped = Number.isFinite(interval)
+        ? Math.min(CONTAINER_INTERVAL.max, Math.max(CONTAINER_INTERVAL.min, interval))
+        : CONTAINER_INTERVAL.fallback;
+      cell.container = {
+        mode: 'carousel',
+        direction: els.containerDirection.value,
+        autoplay: els.containerTrigger.value === 'auto',
+        interval: clamped,
+        items: Array.isArray(previous.items) ? previous.items : [],
+      };
+      if (els.containerInterval.value !== String(clamped)) els.containerInterval.value = String(clamped);
+    }
+    // 位置和尺寸不在这里改：摆位靠拖拽（board.js 的 legal()）、尺寸靠拖右下角手柄
+    // 或「尺寸」模版 —— 各自都带校验，这里不碰 cell.pos / cell.size。
+  }
+
+  function onEdited() {
+    applyForm();
+    renderPreview();
+    if (nested) {
+      const parent = editor.parentEditor;
+      if (parent?.cell) {
+        renderContainerItems(parent);
+        parent.renderPreview();
+        refreshContainerOnBoard(parent.cell);
+      }
+    } else {
+      const cell = currentCell();
+      if (cell) refreshContainerOnBoard(cell);
+    }
+    markDirty();
+  }
+
+  /**
+   * What will this cell look like on the page?
+   *
+   * The answer is the same in both layouts: a cell spans `w × h` units, so the
+   * preview draws **this cell and nothing else**, on a grid exactly that many
+   * columns wide, scaled to fit the drawer.
+   *
+   * Drawing the real grid instead is what used to happen for a board document —
+   * twelve columns of 96px is 1460px of grid inside a 390px drawer, with the cell
+   * parked at its own column and therefore off-screen — and a flow document had
+   * the mirror problem, a wide cell spilling out of the box (8 columns of 62px is
+   * 566px). Both are the same bug: previewing the page instead of the cell.
+   *
+   * 容器里的子盒子没有自己的尺寸：预览按**父容器**的 w×h 画，永远铺满。
+   */
+  function renderPreview() {
+    const cell = editor.cell;
+    const gridEl = els.preview;
+    gridEl.replaceChildren();
+    if (!cell) return;
+    gridEl.append(createCell(cell));
+
+    const site = state.doc.site || {};
+    const parent = nested ? editor.parentEditor?.cell : null;
+    const { w, h } = parent ? cellUnits(parent) : cellUnits(cell);
+    // Columns the page would give it: a board has a fixed count, a flow document
+    // caps the span at the column setting (0 = auto, which is the cell's own width)
+    const cols = Math.min(w, isBoard() ? boardCols() : Number(site.columns) || w);
+    const box = previewWidth(gridEl);
+    // the page's spacing as a share of a cell, kept at whatever size we draw
+    const ratio = gapPx(site.gap) / PREVIEW_REFERENCE;
+    // how big one unit would be if the cell filled the box
+    const fitUnit = box / (cols + (cols - 1) * ratio);
+    const unit = Math.min(PREVIEW_UNIT, fitUnit, PREVIEW_MAX_H / (h + (h - 1) * ratio));
+    // The gap is stated at the *fit* size, not at `unit`: the layout pass divides
+    // the box by (cell + gap) and then multiplies by `scale` below, and the two
+    // cancel out exactly — so the drawn gap is `ratio * unit` either way.
+    gridEl.style.setProperty('--gap', `${(ratio * fitUnit).toFixed(2)}px`);
+    applyGridLayout(gridEl, cols, {
+      layout: 'board',
+      cells: [{ ...cell, pos: { x: 0, y: 0, w: cols, h } }],
+      minCell: 1, // the layout pass must not floor this: the preview always fits
+      scale: unit / fitUnit,
+    });
+  }
+
+  function fill() {
+    fillForm();
+  }
+
+  /**
+   * 打开 / 切换这个面板正在编辑的格子。
+   *
+   * `withSizes` = **这颗格子已经有尺寸了**：手势拖出来的、早就画好的、要编辑的格子。
+   * 只有「＋ 添加格子」是反过来的：它刚落一颗 1×1，尺寸还没定 —— 所以给模版挑。
+   */
+  function open(newCell, { withSizes = false } = {}) {
+    editor.cell = newCell;
+    editor.withSizes = withSizes;
+    editor.isOpen = true;
+    root.hidden = false;
+    requestAnimationFrame(() => {
+      if (editor.isOpen) root.classList.add('is-open');
+    });
+    fillForm();
+    renderPreview();
+  }
+
+  function close() {
+    closeColorPop();
+    editor.isOpen = false;
+    root.classList.remove('is-open');
+    setTimeout(() => {
+      if (!editor.isOpen) root.hidden = true;
+    }, 280);
+  }
+
+  function bind() {
+    buildSelects();
+    buildSizeOptions();
+    buildMarginOptions();
+
+    const live = [
+      els.type, els.borderWidth, els.radius, els.image, els.html, els.embed, els.fit,
+      els.imageTitle, els.color, els.ovEnabled, els.ovTitle, els.ovBody,
+      els.ovDir, els.ovRatio, els.link, els.fsRadius, els.containerMode,
+    ];
+    for (const element of new Set(live)) element.addEventListener('input', onEdited);
+
+    els.type.addEventListener('change', () => {
+      if (!nested && els.type.value === 'container') {
+        ensureContainer(editor.cell);
+        fillContainerForm(editor, editor.cell);
+      }
+      if (!nested && els.type.value !== 'container') closeChildEditor();
+      syncTypeVisibility();
+      onEdited();
+    });
+
+    // 容器设置：下拉和数字框用 change，别在输入过程中反复重建预览 / 棋盘
+    els.containerTrigger.addEventListener('change', () => {
+      syncContainerIntervalVisibility(editor);
+      onEdited();
+    });
+    els.containerDirection.addEventListener('change', onEdited);
+    els.containerInterval.addEventListener('change', onEdited);
+
+    // 每一行：点色板弹取色面板；文本框里手打 hex 也实时反映到色板上
+    for (const [swatch, text, allowNone] of [
+      [els.borderColor, els.borderColorText, true],
+      [els.imageTitleColor, els.imageTitleColorText, false],
+      [els.color, els.colorText, true],
+      [els.ovBg, els.ovBgText, false],
+      [els.ovFg, els.ovFgText, false],
+      [els.fsColor, els.fsColorText, false],
+    ]) {
+      swatch.addEventListener('click', () => {
+        if (!pop.box.hidden && popTarget && popTarget.swatch === swatch) closeColorPop();
+        else openColorPop(swatch, text, allowNone, editor);
+      });
+      text.addEventListener('input', () => {
+        const value = text.value.trim();
+        if (HEX.test(value)) {
+          swatch.dataset.color = value;
+          paintSwatch(swatch);
+        } else if (value === '' && allowNone) {
+          swatch.dataset.color = '';
+          paintSwatch(swatch);
+        }
+        onEdited();
+      });
+    }
+
+    els.close.addEventListener('click', () => (nested ? closeChildEditor() : closeDrawer()));
+    els.done.addEventListener('click', () => (nested ? closeChildEditor() : closeDrawer()));
+    els.deleteBtn.addEventListener('click', () => {
+      if (nested) deleteEditingChild(editor);
+      else removeCell(state.editingId);
+    });
+
+    bindUpload(editor, els.btnUpload, els.fileUpload, 'uploads', els.image, '图片已上传');
+    bindUpload(editor, els.btnUploadHtml, els.fileUploadHtml, 'pages', els.html, 'HTML 文件已上传');
+    bindUpload(editor, els.btnUploadEmbed, els.fileUploadEmbed, 'pages', els.embed, 'HTML 文件已上传');
+    els.btnClearUpload.addEventListener('click', () => {
+      els.image.value = '';
+      onEdited();
+    });
+    els.btnOpenHtml.addEventListener('click', () => {
+      const target = els.html.value.trim();
+      if (!target) return toast('先填地址或上传一个 HTML 文件', 'error');
+      window.open(target, '_blank', 'noopener');
+    });
+    bindActionTabs();
+    els.btnOpenEmbed.addEventListener('click', () => {
+      const target = els.embed.value.trim();
+      if (!target) return toast('先填地址或上传一个 HTML 文件', 'error');
+      window.open(target, '_blank', 'noopener');
+    });
+
+    // 容器列表：点一行打开子盒子，点 ✕ 删除
+    els.containerItems.addEventListener('click', (event) => {
+      const row = event.target.closest('.container-row');
+      if (!row) return;
+      const index = Number(row.dataset.index);
+      if (event.target.closest('[data-act="rm"]')) return deleteContainerItem(editor, index);
+      openChildEditor(editor.cell.id, index);
+    });
+    els.containerAdd.addEventListener('click', () => addContainerItem(editor));
+    els.containerImport.addEventListener('click', () => openContainerImport(editor));
+
+    root.querySelector('.drawer__body').addEventListener('scroll', closeColorPop, { passive: true });
+  }
+
+  editor.open = open;
+  editor.close = close;
+  editor.fill = fill;
+  editor.renderPreview = renderPreview;
+  editor.onEdited = onEdited;
+  editor.bind = bind;
+  return editor;
+}
+
+/* ------------------------------------------------------ 容器编辑辅助 */
+
+const CELL_TYPE_LABELS = { image: '图片', html: '网页', solid: '纯色', container: '容器' };
+
+/** 列表 / 仓库行共用的一行标题。 */
+function cellTitle(cell) {
+  if (!cell || typeof cell !== 'object') return '空盒子';
+  if (cell.type === 'container') {
+    const count = Array.isArray(cell.container?.items) ? cell.container.items.length : 0;
+    return `容器 · ${count} 个盒子`;
+  }
+  return cell.imageTitle || CELL_TYPE_LABELS[cell.type] || '图片';
+}
+
+/** 列表 / 仓库行共用的小缩略图；容器取第一个非容器子盒子的缩略图。 */
+function cellThumb(cell, depth = 0) {
+  const thumb = document.createElement('span');
+  thumb.className = 'file-row__thumb repo-thumb';
+  if (!cell || typeof cell !== 'object') {
+    thumb.textContent = '?';
+    return thumb;
+  }
+  if (cell.type === 'container' && depth < 1) {
+    const first = (cell.container?.items || []).find((item) => item && item.type !== 'container');
+    if (first) return cellThumb(first, depth + 1);
+  }
+  if (cell.type === 'solid') {
+    thumb.style.background = cell.color || 'var(--ink-500)';
+  } else if (cell.type === 'image' && cell.image) {
+    const img = document.createElement('img');
+    img.src = cell.image;
+    img.alt = '';
+    img.loading = 'lazy';
+    thumb.append(img);
+  } else {
+    thumb.classList.add('file-row__thumb--text');
+    thumb.textContent = CELL_TYPE_LABELS[cell.type] || '图';
+  }
+  return thumb;
+}
+
+/** 确保容器对象形状完整（客户端导入的原始 JSON 不能假设字段齐全）。 */
+function ensureContainer(cell) {
+  if (!cell) return null;
+  if (!cell.container || typeof cell.container !== 'object') cell.container = defaultContainer();
+  const container = cell.container;
+  if (!Array.isArray(container.items)) container.items = [];
+  container.mode = 'carousel';
+  if (!CONTAINER_DIRECTIONS.some((option) => option.value === container.direction)) {
+    container.direction = 'left';
+  }
+  if (typeof container.autoplay !== 'boolean') container.autoplay = true;
+  const interval = Math.round(Number(container.interval));
+  container.interval = Number.isFinite(interval)
+    ? Math.min(CONTAINER_INTERVAL.max, Math.max(CONTAINER_INTERVAL.min, interval))
+    : CONTAINER_INTERVAL.fallback;
+  return container;
+}
+
+function syncContainerIntervalVisibility(editor) {
+  editor.els.containerIntervalField.hidden = editor.els.containerTrigger.value !== 'auto';
+}
+
+/** 把容器配置填进表单（只在主面板、且类型是容器时调用）。 */
+function fillContainerForm(editor, cell) {
+  const container = ensureContainer(cell);
+  if (!container) return;
+  const { els } = editor;
+  els.containerMode.value = container.mode;
+  els.containerDirection.value = container.direction;
+  els.containerTrigger.value = container.autoplay ? 'auto' : 'manual';
+  els.containerInterval.value = container.interval;
+  syncContainerIntervalVisibility(editor);
+  renderContainerItems(editor);
+}
+
+/** 主面板里的子盒子列表。子盒子没有 id，用数组下标定位。 */
+function renderContainerItems(editor) {
+  const list = editor?.els?.containerItems;
+  if (!list) return;
+  const cell = editor.cell;
+  // 不看 cell.type：把类型切到容器的同一拍里，applyForm 还没来得及写 type，
+  // 但已有的 items 应该照常显示出来。
+  const items = Array.isArray(cell?.container?.items) ? cell.container.items : [];
+  list.replaceChildren();
+  if (!items.length) {
+    const empty = document.createElement('li');
+    empty.className = 'file-empty';
+    empty.textContent = '容器里还没有盒子';
+    list.append(empty);
+    return;
+  }
+  items.forEach((item, index) => {
+    const row = document.createElement('li');
+    row.className = 'file-row container-row';
+    row.dataset.index = String(index);
+
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'container-row__open';
+    open.append(cellThumb(item));
+
+    const name = document.createElement('span');
+    name.className = 'file-row__name';
+    name.textContent = cellTitle(item);
+    const meta = document.createElement('span');
+    meta.className = 'file-row__meta';
+    meta.textContent = `${index + 1} · ${CELL_TYPE_LABELS[item.type] || '图片'}`;
+    open.append(name, meta);
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'file-row__del';
+    del.dataset.act = 'rm';
+    del.title = '删除这个盒子';
+    del.setAttribute('aria-label', `删除第 ${index + 1} 个盒子`);
+    del.textContent = '✕';
+
+    row.append(open, del);
+    list.append(row);
   });
+}
+
+/** 子盒子改了 / 列表变了：把父容器在棋盘上的那颗 slot 重建。 */
+function refreshContainerOnBoard(cell) {
+  if (!cell) return;
+  board.refresh(boardCells().find((item) => item.id === cell.id) || cell);
+  layoutBoard();
+}
+
+function addContainerItem(editor) {
+  const container = ensureContainer(editor.cell);
+  if (!container) return;
+  if (container.items.length >= MAX_CONTAINER_ITEMS) {
+    return toast(`容器最多放 ${MAX_CONTAINER_ITEMS} 个盒子`, 'error');
+  }
+  container.items.push(childCell());
+  renderContainerItems(editor);
+  editor.onEdited();
+  openChildEditor(editor.cell.id, container.items.length - 1);
+}
+
+function deleteContainerItem(editor, index) {
+  const items = editor?.cell?.container?.items;
+  if (!Array.isArray(items) || !items[index]) return;
+  if (!confirm('确定从容器里删除这个盒子？')) return;
+  items.splice(index, 1);
+  if (childEditor?.isOpen) closeChildEditor();
+  renderContainerItems(editor);
+  editor.onEdited();
+}
+
+/** 子面板页脚的「删除这个盒子」：按对象引用找回它在父容器里的下标。 */
+function deleteEditingChild(editor) {
+  const parent = editor.parentEditor;
+  const items = parent?.cell?.container?.items;
+  const index = Array.isArray(items) ? items.indexOf(editor.cell) : -1;
+  if (index < 0) return closeChildEditor();
+  deleteContainerItem(parent, index);
 }
 
 /**
- * 打开抽屉。
- *
- * `withSizes` = **这颗格子已经有尺寸了**：手势拖出来的（拖多大就是多大）、或者早就
- * 画好的、要编辑的格子。有尺寸就不给尺寸模版。
- *
- * 只有「＋ 添加格子」是反过来的：它刚落一颗 1×1，尺寸还没定 —— 所以给模版挑。
- *
- * 「位置与尺寸」那块整块不出现（见 admin.html 的注释）：摆位和改尺寸都靠棋盘上拖拽。
+ * 打开容器里某个子盒子的面板。如果主面板还没开在容器上，先把它打开。
+ * 子面板从右侧滑入、盖在主面板上方。
  */
+function openChildEditor(containerId, index) {
+  const container = state.doc.cells.find((item) => item.id === containerId);
+  if (!container || container.type !== 'container') return;
+  const config = ensureContainer(container);
+  const item = config.items[index];
+  if (!item) return;
+  if (!mainEditor?.isOpen || state.editingId !== containerId || mainEditor.cell?.id !== containerId) {
+    openDrawer(containerId, { withSizes: true });
+  }
+  if (!childEditor) {
+    childEditor = createCellEditor({ nested: true, prefix: 'nx-' });
+    childEditor.bind();
+  }
+  childEditor.parentEditor = mainEditor;
+  childEditor.indexInParent = index;
+  childEditor.open(item, { withSizes: true });
+}
+
+function closeChildEditor() {
+  if (!childEditor || !childEditor.isOpen) return;
+  childEditor.close();
+}
+
+/* ------------------------------------------------------ 仓库导入（容器用） */
+
+const containerImport = $('container-import');
+const containerImportList = $('container-import-list');
+const containerImportCancel = $('container-import-cancel');
+let containerImportEditor = null;
+let containerImportBoxes = [];
+
+function importEmpty(text) {
+  const item = document.createElement('li');
+  item.className = 'file-empty';
+  item.textContent = text;
+  return item;
+}
+
+function renderContainerImport(boxes) {
+  containerImportList.replaceChildren();
+  if (!boxes.length) {
+    containerImportList.append(importEmpty('仓库里还没有可以放进容器的盒子。'));
+    return;
+  }
+  const groups = new Map();
+  for (const box of boxes) {
+    const label = box.label || '未命名';
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(box);
+  }
+  for (const label of [...groups.keys()].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))) {
+    const head = document.createElement('li');
+    head.className = 'repo-group';
+    head.textContent = `${label} · ${groups.get(label).length}`;
+    containerImportList.append(head);
+    for (const box of groups.get(label)) {
+      const row = document.createElement('li');
+      row.className = 'file-row';
+      const name = document.createElement('span');
+      name.className = 'file-row__name';
+      name.textContent = cellTitle(box.cell);
+      const meta = document.createElement('span');
+      meta.className = 'file-row__meta';
+      meta.textContent = [box.info, box.sharerName && `by ${box.sharerName}`].filter(Boolean).join(' · ');
+      const pick = document.createElement('button');
+      pick.type = 'button';
+      pick.className = 'btn btn--ghost';
+      pick.dataset.act = 'pick';
+      pick.dataset.id = box.id;
+      pick.textContent = '导入';
+      row.append(cellThumb(box.cell), name, meta, pick);
+      containerImportList.append(row);
+    }
+  }
+}
+
+async function openContainerImport(editor) {
+  if ((editor?.cell?.container?.items?.length || 0) >= MAX_CONTAINER_ITEMS) {
+    return toast(`容器最多放 ${MAX_CONTAINER_ITEMS} 个盒子`, 'error');
+  }
+  containerImportEditor = editor;
+  containerImport.hidden = false;
+  closeColorPop();
+  containerImportList.replaceChildren(importEmpty('加载中…'));
+  try {
+    const data = await api('/api/repository');
+    // 容器不能嵌套：列表里只出现图片 / 纯色 / 网页盒子
+    containerImportBoxes = (data.boxes || []).filter((box) => box.cell && box.cell.type !== 'container');
+    renderContainerImport(containerImportBoxes);
+  } catch (err) {
+    containerImportBoxes = [];
+    containerImportList.replaceChildren(importEmpty(`加载失败：${err.message}`));
+  }
+}
+
+function closeContainerImport() {
+  containerImport.hidden = true;
+  containerImportEditor = null;
+  containerImportBoxes = [];
+}
+
+function addImportedItem(editor, raw) {
+  const container = ensureContainer(editor?.cell);
+  if (!container) return;
+  if (container.items.length >= MAX_CONTAINER_ITEMS) {
+    return toast(`容器最多放 ${MAX_CONTAINER_ITEMS} 个盒子`, 'error');
+  }
+  const source = raw && typeof raw === 'object' ? structuredClone(raw) : {};
+  if (source.type === 'container') return toast('容器盒子不能放进容器里', 'error');
+  const item = childCell({
+    ...source,
+    id: undefined,
+    pos: undefined,
+    size: '1x1',
+    type: ['image', 'solid', 'html'].includes(source.type) ? source.type : 'image',
+    overlay: { ...defaultOverlay(), ...(source.overlay || {}) },
+    fullscreen: { ...defaultFullscreen(), ...(source.fullscreen || {}) },
+  });
+  container.items.push(item);
+  renderContainerItems(editor);
+  editor.onEdited();
+  openChildEditor(editor.cell.id, container.items.length - 1);
+  toast('已加入容器', 'ok');
+}
+
+containerImportCancel.addEventListener('click', closeContainerImport);
+containerImport.addEventListener('click', (event) => {
+  if (event.target === containerImport) closeContainerImport();
+});
+containerImportList.addEventListener('click', (event) => {
+  const pick = event.target.closest('button[data-act="pick"]');
+  if (!pick || !containerImportEditor) return;
+  const box = containerImportBoxes.find((item) => item.id === pick.dataset.id);
+  if (!box) return;
+  addImportedItem(containerImportEditor, box.cell);
+  closeContainerImport();
+});
+
+/* ------------------------------------------------------------ 顶层抽屉 */
+
 function openDrawer(id, { withSizes = false } = {}) {
   const cell = state.doc.cells.find((item) => item.id === id);
-  if (!cell) return;
+  if (!cell || !mainEditor) return;
+  if (state.editingId !== id) closeChildEditor();
   state.editingId = id;
-  drawer.hidden = false;
   scrim.hidden = false;
   requestAnimationFrame(() => {
-    drawer.classList.add('is-open');
-    scrim.classList.add('is-open');
+    if (state.editingId) scrim.classList.add('is-open');
   });
-  fillForm(cell);
-  // 放在 fillForm 后面：它按格子类型开关那些块，别被覆盖
-  $('field-sizes').hidden = withSizes;
-  renderPreview();
+  mainEditor.open(cell, { withSizes });
 }
 
 function closeDrawer() {
-  closeColorPop();
+  closeChildEditor();
+  closeContainerImport();
   state.editingId = null;
-  drawer.classList.remove('is-open');
+  mainEditor?.close();
   scrim.classList.remove('is-open');
   setTimeout(() => {
-    if (!state.editingId) {
-      drawer.hidden = true;
-      scrim.hidden = true;
-    }
+    if (!state.editingId) scrim.hidden = true;
   }, 280);
+}
+
+/** 站点设置 / 窗口尺寸变了：两个打开着的预览都重画。 */
+function renderPreviews() {
+  if (mainEditor?.isOpen) mainEditor.renderPreview();
+  if (childEditor?.isOpen) childEditor.renderPreview();
 }
 
 /** Content types for files the browser hands over without one of its own. */
@@ -1177,9 +1756,9 @@ function contentTypeOf(file) {
 }
 
 /** Wire an upload button + hidden file input to one of the file collections. */
-function bindUpload(buttonId, inputId, kind, field, okMessage) {
-  $(buttonId).addEventListener('click', () => $(inputId).click());
-  $(inputId).addEventListener('change', async (event) => {
+function bindUpload(editor, button, input, kind, field, okMessage) {
+  button.addEventListener('click', () => input.click());
+  input.addEventListener('change', async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
@@ -1191,85 +1770,12 @@ function bindUpload(buttonId, inputId, kind, field, okMessage) {
         body: file,
       });
       field.value = result.url;
-      onEdited();
+      editor.onEdited();
       toast(okMessage, 'ok');
       refreshFilesIfVisible();
     } catch (err) {
       toast(err.message, 'error');
     }
-  });
-}
-
-function bindEditor() {
-  buildSelects();
-  buildSizeOptions();
-  buildMarginOptions();
-
-  const live = [
-    els.type, els.borderWidth, els.radius, els.image, els.html, els.embed, els.fit,
-    els.imageTitle, els.color, els.color, els.ovEnabled, els.ovTitle, els.ovBody,
-    els.ovDir, els.ovRatio, els.link,
-    els.fsRadius,
-  ];
-  for (const element of new Set(live)) element.addEventListener('input', onEdited);
-
-  els.type.addEventListener('change', () => {
-    syncTypeVisibility();
-    onEdited();
-  });
-
-  // 每一行：点色板弹取色面板；文本框里手打 hex 也实时反映到色板上
-  for (const [swatch, text, allowNone] of [
-    [els.borderColor, els.borderColorText, true],
-    [els.imageTitleColor, els.imageTitleColorText, false],
-    [els.color, els.colorText, true],
-    [els.ovBg, els.ovBgText, false],
-    [els.ovFg, els.ovFgText, false],
-    [els.fsColor, els.fsColorText, false],
-  ]) {
-    swatch.addEventListener('click', () => {
-      if (!pop.box.hidden && popTarget && popTarget.swatch === swatch) closeColorPop();
-      else openColorPop(swatch, text, allowNone);
-    });
-    text.addEventListener('input', () => {
-      const value = text.value.trim();
-      if (HEX.test(value)) {
-        swatch.dataset.color = value;
-        paintSwatch(swatch);
-      } else if (value === '' && allowNone) {
-        swatch.dataset.color = '';
-        paintSwatch(swatch);
-      }
-      onEdited();
-    });
-  }
-
-  $('drawer-close').addEventListener('click', closeDrawer);
-  $('ed-done').addEventListener('click', closeDrawer);
-  scrim.addEventListener('click', closeDrawer);
-  $('ed-delete').addEventListener('click', () => removeCell(state.editingId));
-
-  bindUpload('btn-upload', 'upload-file', 'uploads', els.image, '图片已上传');
-  bindUpload('btn-upload-html', 'upload-file-html', 'pages', els.html, 'HTML 文件已上传');
-  bindUpload('btn-upload-embed', 'upload-file-embed', 'pages', els.embed, 'HTML 文件已上传');
-  $('btn-clear-upload').addEventListener('click', () => {
-    els.image.value = '';
-    onEdited();
-  });
-  $('btn-open-html').addEventListener('click', () => {
-    const target = els.html.value.trim();
-    if (!target) return toast('先填地址或上传一个 HTML 文件', 'error');
-    window.open(target, '_blank', 'noopener');
-  });
-  bindActionTabs();
-  $('btn-open-embed').addEventListener('click', () => {
-    const target = els.embed.value.trim();
-    if (!target) return toast('先填地址或上传一个 HTML 文件', 'error');
-    window.open(target, '_blank', 'noopener');
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && state.editingId) closeDrawer();
   });
 }
 
@@ -1314,7 +1820,13 @@ const formatSize = (bytes) =>
       : `${(bytes / 1048576).toFixed(1)} MB`;
 
 /** How many cells point at this file — deleting it would break them. */
-const usersOf = (url) => state.doc.cells.filter((cell) => cell.image === url || cell.html === url).length;
+/** 有多少颗格子引用了这个文件 —— 容器里的子盒子也算（递归一层）。 */
+function cellUsesFile(cell, url) {
+  if (!cell || typeof cell !== 'object') return false;
+  if (cell.image === url || cell.html === url || cell.embed === url) return true;
+  return Array.isArray(cell.container?.items) && cell.container.items.some((item) => cellUsesFile(item, url));
+}
+const usersOf = (url) => state.doc.cells.filter((cell) => cellUsesFile(cell, url)).length;
 
 async function loadFiles(kind = fileKind) {
   fileKind = kind;
@@ -1806,25 +2318,6 @@ async function loadRepository() {
   }
 }
 
-/** 一颗盒子的缩略图：纯色给色块，图片给图，网页封面给字。 */
-function repoThumb(cell) {
-  const thumb = document.createElement('span');
-  thumb.className = 'file-row__thumb repo-thumb';
-  if (cell.type === 'solid') {
-    thumb.style.background = cell.color || 'var(--ink-500)';
-  } else if (cell.type === 'image' && cell.image) {
-    const img = document.createElement('img');
-    img.src = cell.image;
-    img.alt = '';
-    img.loading = 'lazy';
-    thumb.append(img);
-  } else {
-    thumb.classList.add('file-row__thumb--text');
-    thumb.textContent = cell.type === 'html' ? 'HTML' : '图';
-  }
-  return thumb;
-}
-
 function repoRow(box) {
   const row = document.createElement('li');
   row.className = 'file-row';
@@ -1833,7 +2326,7 @@ function repoRow(box) {
   const cell = box.cell || {};
   const name = document.createElement('span');
   name.className = 'file-row__name';
-  name.textContent = cell.imageTitle || `${cell.size || '1x1'} · ${cell.type || 'image'}`;
+  name.textContent = cellTitle(cell);
 
   const meta = document.createElement('span');
   meta.className = 'file-row__meta';
@@ -1848,7 +2341,7 @@ function repoRow(box) {
     );
   }
 
-  row.append(repoThumb(cell), name, meta, actions);
+  row.append(cellThumb(cell), name, meta, actions);
   return row;
 }
 
@@ -2025,7 +2518,7 @@ function openShareDialog(id) {
   shareLabel.value = '';
   shareInfo.value = '';
   showShareError('');
-  shareTarget.textContent = cell.imageTitle ? `「${cell.imageTitle}」` : '这个盒子';
+  shareTarget.textContent = cell.type === 'container' ? `「${cellTitle(cell)}」` : cell.imageTitle ? `「${cell.imageTitle}」` : '这个盒子';
   shareDialog.hidden = false;
   requestAnimationFrame(() => shareLabel.focus());
 }
@@ -2080,7 +2573,7 @@ function myShareRow(box) {
   const cell = box.cell || {};
   const name = document.createElement('span');
   name.className = 'file-row__name';
-  name.textContent = cell.imageTitle || `${cell.size || '1x1'} · ${cell.type || 'image'}`;
+  name.textContent = cellTitle(cell);
 
   const meta = document.createElement('span');
   meta.className = 'file-row__meta';
@@ -2090,7 +2583,7 @@ function myShareRow(box) {
   actions.className = 'file-row__acts';
   actions.append(actionButton('rm', '✕', '取消分享', box.id));
 
-  row.append(repoThumb(cell), name, meta, actions);
+  row.append(cellThumb(cell), name, meta, actions);
   return row;
 }
 
@@ -2166,7 +2659,30 @@ async function save() {
     $('dirty-flag').hidden = true;
     renderSite();
     renderBoard();
-    if (state.editingId) renderPreview();
+    // 服务端返回的是整份新文档；抽屉里握着的是旧对象，重新指过去再重填。
+    if (state.editingId) {
+      const mainCell = state.doc.cells.find((cell) => cell.id === state.editingId);
+      if (!mainCell) {
+        closeDrawer();
+      } else {
+        mainEditor.cell = mainCell;
+        mainEditor.fill();
+        if (childEditor?.isOpen) {
+          const items =
+            mainCell.type === 'container' && Array.isArray(mainCell.container?.items)
+              ? mainCell.container.items
+              : [];
+          const child = items[childEditor.indexInParent];
+          if (child) {
+            childEditor.cell = child;
+            childEditor.fill();
+          } else {
+            closeChildEditor();
+          }
+        }
+        renderPreviews();
+      }
+    }
     refreshFilesIfVisible();
     toast('已保存', 'ok');
   } catch (err) {
@@ -2194,6 +2710,8 @@ async function importJson(file) {
   try {
     const parsed = JSON.parse(await file.text());
     if (!parsed || !Array.isArray(parsed.cells)) throw new Error('文件格式不正确：缺少 cells 数组');
+    // 导入会换掉整份文档；抽屉里握着的对象全部作废，先关掉（不然会写回孤儿对象）
+    closeDrawer();
     state.doc = { site: parsed.site || {}, cells: parsed.cells };
     // the server will repair this on save; do the same here so the board shows it
     if (state.doc.site.layout === 'board') state.doc.cells = repairBoard(state.doc.cells, boardCols());
@@ -2223,7 +2741,7 @@ function bindToolbar() {
     // 它是唯一「尺寸还没定」的入口：先落 1×1，在抽屉里点个模版就变那么大（位置不用调）
     openDrawer(cell.id);
     board.select(cell.id);
-    drawer.querySelector('.drawer__body').scrollTop = 0;
+    mainEditor.root.querySelector('.drawer__body').scrollTop = 0;
     // 它在最下面，滚进视野——关掉抽屉就能看见
     boardEl.querySelector(`.slot[data-id="${CSS.escape(cell.id)}"]`)?.scrollIntoView({ block: 'nearest' });
   });
@@ -2296,11 +2814,44 @@ async function boot() {
   bindLogin();
   bindToolbar();
   bindBoard();
-  bindEditor();
+
+  // 主编辑面板从模板克隆；子盒子面板在第一次点开时再建（见 openChildEditor）
+  mainEditor = createCellEditor({ nested: false, prefix: '' });
+  mainEditor.bind();
+  scrim.addEventListener('click', () => {
+    // 只收最上面那一层：子面板开着就先收子面板
+    if (childEditor?.isOpen) closeChildEditor();
+    else closeDrawer();
+  });
+
   bindSitePanel();
   bindFiles();
   bindPeople();
   bindShare();
+
+  /*
+   * Esc 的层级：取色面板 → 仓库导入 → 子面板 → 主面板 → 分享模式。
+   * 取色面板自己最先注册并用 stopImmediatePropagation 拦住；分享窗口的监听在
+   * bindShare() 里、比这里先注册，也会自己 stopImmediatePropagation。
+   */
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!pop.box.hidden) return;
+    if (!containerImport.hidden) {
+      closeContainerImport();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (childEditor?.isOpen) {
+      closeChildEditor();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (state.editingId) {
+      closeDrawer();
+      event.stopImmediatePropagation();
+    }
+  });
 
   window.addEventListener('beforeunload', (event) => {
     if (!state.dirty) return undefined;

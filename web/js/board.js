@@ -24,7 +24,7 @@ const ACTIONS = [
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onSelect }) {
+export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onSelect, onChildEdit }) {
   let cells = [];
   let columns = 12;
   let selectedId = null;
@@ -131,8 +131,8 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
 
   function onPointerDown(event) {
     if (event.button !== 0 && event.pointerType === 'mouse') return;
-    // the action buttons are buttons: a press there must not start a drag
-    if (event.target.closest('.slot__bar')) return;
+    // the action buttons (and carousel arrows) are controls: a press there must not start a drag
+    if (event.target.closest('.slot__bar, [data-no-drag]')) return;
 
     const slot = event.target.closest('.slot');
     const handle = event.target.closest('.slot__handle');
@@ -290,7 +290,8 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
     slot.dataset.h = cell.pos ? cell.pos.h : 1;
     if (cell.id === selectedId) slot.classList.add('is-selected');
 
-    const node = createCell(cell);
+    // 棋盘是编辑界面：轮播不自动走，免得拖拽 / 选择时目标一直换
+    const node = createCell(cell, { autoplay: false });
     node.querySelectorAll('img').forEach((img) => (img.draggable = false));
     slot.append(node);
 
@@ -409,6 +410,16 @@ export function createBoard({ root, onEdit, onDuplicate, onRemove, onChange, onS
         if (button.dataset.act === 'edit') onEdit(id);
         if (button.dataset.act === 'dup') onDuplicate(id);
         if (button.dataset.act === 'del') onRemove(id);
+        return;
+      }
+      // 点容器里的子盒子：直接打开它自己的编辑面板（不是容器的）。
+      // 卡片本体（边框 / 空白）照旧是 select → onSelect → 打开容器编辑。
+      const child = event.target.closest('[data-child-index]');
+      if (child && slot) {
+        event.preventDefault();
+        if (justDragged) return;
+        select(slot.dataset.id);
+        if (onChildEdit) onChildEdit(slot.dataset.id, Number(child.dataset.childIndex));
         return;
       }
       if (slot && !justDragged) {
