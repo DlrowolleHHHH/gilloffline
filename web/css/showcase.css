@@ -405,13 +405,14 @@
   padding: 10px;
 }
 
-/* an embedded HTML page fills the cell; the frame stays transparent so a page
-   without its own background takes the cell's colour */
+/* an embedded HTML page fills the cell; a page without its own background
+   takes the cell's border colour instead of showing a white base */
 .cell__frame {
   display: block;
   width: 100%;
   height: 100%;
   border: 0;
+  background: var(--border, var(--accent));
 }
 
 /*
@@ -532,7 +533,8 @@
   width: 100%;
   height: 100%;
   border: 0;
-  background: #fff; /* 页面自己没设底色时，别透出站点的深色 */
+  /* 页面自己没设底色时，跟着全屏留白走；写死白色会在深色留白里露出一块白底 */
+  background: var(--fs-color, var(--ink-900, #08070d));
 }
 
 .fullscreen__close {
