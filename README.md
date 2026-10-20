@@ -622,6 +622,29 @@ docker restart gilloffline
 把最后三条命令存成一个脚本放进 `/etc/letsencrypt/renewal-hooks/deploy/`，
 certbot 自带的 `certbot.timer` 每次续期成功后都会自动调用它，容器随即换上新的证书，之后就不用管了。
 
+#### 续期节奏与检查
+
+Ubuntu / Debian 的 certbot 包会安装并启用 `certbot.timer`，不需要自己再写 cron：
+
+- 每天 `00:00` / `12:00` 各检查一次；timer 带 `RandomizedDelaySec=12h`，实际触发时间会在这半天内漂移，
+  以 `systemctl list-timers certbot.timer` 显示的 `NEXT` 为准。
+- 到点触发的是 `certbot.service`，执行 `certbot -q renew --no-random-sleep-on-renew`；
+  只有证书进入剩余 30 天内才真正续期，平时只是一次快速检查。
+- `/etc/cron.d/certbot` 里也有一条 cron，但它带 `! -d /run/systemd/system` 条件，systemd 下不会执行；
+  真正生效的是 timer，不要重复配置。
+
+检查续期状态：
+
+```bash
+systemctl list-timers certbot.timer --no-pager    # 下次 / 上次触发时间
+systemctl status certbot.service --no-pager -n 15 # 上次续期是否成功
+certbot certificates                              # 证书域名与到期时间
+```
+
+平时没有常驻的 `certbot` 进程：到点才会起一个短进程，跑完就退出，所以 `ps` 里看不到它是正常的。
+另外，续期成功后才会执行上面那个 deploy 钩子；**首次签发不会自动执行钩子**，签发完要手动跑一次
+（或签发时加 `--deploy-hook`）。
+
 ### 可用环境变量
 
 | 变量 | 默认值 | 说明 |
